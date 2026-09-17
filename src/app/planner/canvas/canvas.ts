@@ -1,0 +1,1707 @@
+import {
+  afterNextRender,
+  afterRenderEffect,
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  ElementRef,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
+import {
+  OBJECT_COLORS,
+  PlacedObject,
+  Point,
+  ROOM_CATEGORY_MAP,
+  SNAP_PIXELS,
+  ShapeKind,
+} from '../../models/floor-plan';
+import {
+  angleDeg,
+  boxSelectMode,
+  collectBoxSelection,
+  dimensionView,
+  dist,
+  hitTest,
+  itemsBBox,
+  midpoint,
+  normalizeRect,
+  objectCenter,
+  rotatedObjectPose,
+  rotationHandles,
+  rotationHandlesFromBox,
+  SnapResult,
+  snapAngle,
+  snapObjectMove,
+  snapToGeometry,
+  snapToRightAngle,
+  snapToWalls,
+  usedRoomCategories,
+} from '../../core/geometry';
+import { PlannerStore } from '../../core/planner-store';
+import { formatLength, metersToDisplay } from '../../core/units';
+
+type DragState =
+  | { type: 'none' }
+  | { type: 'pan'; startX: number; startY: number; panX: number; panY: number }
+  | {
+      type: 'move-objects';
+      orig: { id: string; x: number; y: number }[];
+      start: Point;
+      recorded: boolean;
+    }
+  | {
+      type: 'move-room';
+      id: string;
+      origX: number;
+      origY: number;
+      start: Point;
+      recorded: boolean;
+    }
+  | {
+      type: 'move-wall';
+      id: string;
+      origStart: Point;
+      origEnd: Point;
+      start: Point;
+      recorded: boolean;
+    }
+  | { type: 'move-wall-end'; id: string; end: 'start' | 'end'; recorded: boolean }
+  | {
+      type: 'move-measurement';
+      id: string;
+      origStart: Point;
+      origEnd: Point;
+      start: Point;
+      recorded: boolean;
+    }
+  | { type: 'move-measurement-end'; id: string; end: 'start' | 'end'; recorded: boolean }
+  | {
+      type: 'rotate-objects';
+      orig: { id: string; x: number; y: number; width: number; depth: number; rotation: number }[];
+      startAngle: number;
+      center: Point;
+      recorded: boolean;
+    }
+  | { type: 'draw-shape'; kind: ShapeKind; start: Point }
+  | { type: 'draw-room'; start: Point }
+  | { type: 'box-select'; start: Point; current: Point; additive: boolean };
+
+@Component({
+  selector: 'app-canvas',
+  styles: `
+    :host {
+      display: block;
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      background: var(--canvas);
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      user-select: none;
+    }
+
+    .hud {
+      position: absolute;
+      inset: auto 12px 12px 12px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+
+    .hud-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .chip {
+      background: color-mix(in srgb, var(--bg-panel) 88%, transparent);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 10px;
+      backdrop-filter: blur(8px);
+    }
+
+    .legend-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .empty {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      pointer-events: none;
+      text-align: center;
+      color: var(--text-dim);
+      padding: 24px;
+    }
+
+    .empty h2 {
+      margin: 0 0 8px;
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .empty p {
+      margin: 0;
+      max-width: 36ch;
+      line-height: 1.45;
+    }
+  `,
+  template: `
+    <svg
+      #viewport
+      xmlns="http://www.w3.org/2000/svg"
+      [attr.viewBox]="viewBox()"
+      preserveAspectRatio="none"
+      [style.cursor]="cssCursor()"
+      (pointerdown)="onPointerDown($event)"
+      (pointermove)="onPointerMove($event)"
+      (pointerup)="onPointerUp($event)"
+      (pointercancel)="onPointerUp($event)"
+      (contextmenu)="$event.preventDefault()"
+      (dragover)="onDragOver($event)"
+      (drop)="onDrop($event)"
+    >
+      <g class="world" style="pointer-events: none">
+        @if (grid(); as g) {
+          @for (x of g.minor.vertical; track x) {
+            <line
+              [attr.x1]="x"
+              [attr.x2]="x"
+              [attr.y1]="g.top"
+              [attr.y2]="g.bottom"
+              stroke="var(--grid)"
+              stroke-width="1"
+              vector-effect="non-scaling-stroke"
+            />
+          }
+          @for (y of g.minor.horizontal; track y) {
+            <line
+              [attr.x1]="g.left"
+              [attr.x2]="g.right"
+              [attr.y1]="y"
+              [attr.y2]="y"
+              stroke="var(--grid)"
+              stroke-width="1"
+              vector-effect="non-scaling-stroke"
+            />
+          }
+          @for (x of g.major.vertical; track x) {
+            <line
+              [attr.x1]="x"
+              [attr.x2]="x"
+              [attr.y1]="g.top"
+              [attr.y2]="g.bottom"
+              stroke="var(--grid-major)"
+              stroke-width="1"
+              vector-effect="non-scaling-stroke"
+            />
+          }
+          @for (y of g.major.horizontal; track y) {
+            <line
+              [attr.x1]="g.left"
+              [attr.x2]="g.right"
+              [attr.y1]="y"
+              [attr.y2]="y"
+              stroke="var(--grid-major)"
+              stroke-width="1"
+              vector-effect="non-scaling-stroke"
+            />
+          }
+        }
+
+        @if (store.imageDataUrl()) {
+          <image
+            #bgImage
+            [attr.width]="imageWidth()"
+            [attr.height]="imageHeight()"
+            x="0"
+            y="0"
+            preserveAspectRatio="none"
+            opacity="0.92"
+          />
+        }
+
+        @for (item of drawList(); track item.key) {
+          @switch (item.kind) {
+            @case ('room') {
+              <g>
+                <rect
+                  [attr.x]="item.room.x"
+                  [attr.y]="item.room.y"
+                  [attr.width]="item.room.width"
+                  [attr.height]="item.room.depth"
+                  [attr.fill]="item.fill"
+                  fill-opacity="0.28"
+                  [attr.stroke]="item.stroke"
+                  stroke-width="1.5"
+                  vector-effect="non-scaling-stroke"
+                />
+                @if (item.room.width * zoom() > 48 && item.room.depth * zoom() > 22) {
+                  <text
+                    [attr.x]="item.room.x + item.room.width / 2"
+                    [attr.y]="item.room.y + item.room.depth / 2"
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    fill="var(--text)"
+                    [attr.font-size]="labelSize()"
+                    font-weight="600"
+                  >
+                    {{ item.room.name }}
+                  </text>
+                }
+              </g>
+            }
+            @case ('wall') {
+              <line
+                [attr.x1]="item.wall.start.x"
+                [attr.y1]="item.wall.start.y"
+                [attr.x2]="item.wall.end.x"
+                [attr.y2]="item.wall.end.y"
+                stroke="var(--wall)"
+                [attr.stroke-width]="item.wall.thickness"
+                stroke-linecap="square"
+              />
+            }
+            @case ('object') {
+              <g [attr.transform]="rotateTransform(item.obj)">
+                @if (item.obj.kind === 'rect') {
+                  <rect
+                    [attr.x]="item.obj.x"
+                    [attr.y]="item.obj.y"
+                    [attr.width]="item.obj.width"
+                    [attr.height]="item.obj.depth"
+                    [attr.fill]="item.fill"
+                    fill-opacity="0.82"
+                    stroke="#0d1117"
+                    stroke-opacity="0.35"
+                    stroke-width="1"
+                    vector-effect="non-scaling-stroke"
+                  />
+                } @else {
+                  <ellipse
+                    [attr.cx]="item.obj.x + item.obj.width / 2"
+                    [attr.cy]="item.obj.y + item.obj.depth / 2"
+                    [attr.rx]="item.obj.width / 2"
+                    [attr.ry]="item.obj.depth / 2"
+                    [attr.fill]="item.fill"
+                    fill-opacity="0.82"
+                    stroke="#0d1117"
+                    stroke-opacity="0.35"
+                    stroke-width="1"
+                    vector-effect="non-scaling-stroke"
+                  />
+                }
+                @if (item.obj.name && item.obj.width * zoom() > 28 && item.obj.depth * zoom() > 16) {
+                  @if (item.obj.kind === 'rect') {
+                    <text
+                      [attr.x]="item.obj.x + labelSize() * 0.35"
+                      [attr.y]="item.obj.y + item.obj.depth - labelSize() * 0.28"
+                      text-anchor="start"
+                      fill="#1a1d23"
+                      [attr.font-size]="labelSize()"
+                      font-weight="600"
+                    >
+                      {{ item.obj.name }}
+                    </text>
+                  } @else {
+                    <text
+                      [attr.x]="item.obj.x + item.obj.width / 2"
+                      [attr.y]="item.obj.y + item.obj.depth / 2"
+                      text-anchor="middle"
+                      dominant-baseline="middle"
+                      fill="#1a1d23"
+                      [attr.font-size]="labelSize()"
+                      font-weight="600"
+                    >
+                      {{ item.obj.name }}
+                    </text>
+                  }
+                }
+              </g>
+            }
+          }
+        }
+
+        @for (room of highlightedRooms(); track room.id) {
+          <rect
+            [attr.x]="room.x"
+            [attr.y]="room.y"
+            [attr.width]="room.width"
+            [attr.height]="room.depth"
+            fill="none"
+            stroke="var(--accent)"
+            stroke-width="2"
+            stroke-dasharray="6 4"
+            vector-effect="non-scaling-stroke"
+          />
+        }
+
+        @for (obj of highlightedObjects(); track obj.id) {
+          <rect
+            [attr.x]="obj.x"
+            [attr.y]="obj.y"
+            [attr.width]="obj.width"
+            [attr.height]="obj.depth"
+            fill="none"
+            stroke="var(--accent)"
+            stroke-width="2"
+            stroke-dasharray="6 4"
+            vector-effect="non-scaling-stroke"
+            [attr.transform]="rotateTransform(obj)"
+          />
+        }
+
+        @if (groupBounds(); as box) {
+          <rect
+            [attr.x]="box.x"
+            [attr.y]="box.y"
+            [attr.width]="box.width"
+            [attr.height]="box.depth"
+            fill="none"
+            stroke="var(--accent)"
+            stroke-opacity="0.55"
+            stroke-width="1.5"
+            stroke-dasharray="4 3"
+            vector-effect="non-scaling-stroke"
+          />
+        }
+
+        @for (handle of rotateHandles(); track $index) {
+          <line
+            [attr.x1]="handle.corner.x"
+            [attr.y1]="handle.corner.y"
+            [attr.x2]="handle.handle.x"
+            [attr.y2]="handle.handle.y"
+            stroke="var(--accent)"
+            stroke-width="1.5"
+            vector-effect="non-scaling-stroke"
+          />
+          <circle
+            [attr.cx]="handle.handle.x"
+            [attr.cy]="handle.handle.y"
+            [attr.r]="handleSize() * 0.45"
+            fill="var(--bg-panel)"
+            stroke="var(--accent)"
+            stroke-width="2"
+            vector-effect="non-scaling-stroke"
+          />
+        }
+
+        @for (wall of highlightedWalls(); track wall.id) {
+          <line
+            [attr.x1]="wall.start.x"
+            [attr.y1]="wall.start.y"
+            [attr.x2]="wall.end.x"
+            [attr.y2]="wall.end.y"
+            stroke="var(--accent)"
+            [attr.stroke-width]="wall.thickness + handleSize() * 0.4"
+            stroke-linecap="square"
+            stroke-opacity="0.45"
+          />
+          <rect
+            [attr.x]="wall.start.x - handleSize() / 2"
+            [attr.y]="wall.start.y - handleSize() / 2"
+            [attr.width]="handleSize()"
+            [attr.height]="handleSize()"
+            fill="var(--accent)"
+            stroke="#0d1117"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+          />
+          <rect
+            [attr.x]="wall.end.x - handleSize() / 2"
+            [attr.y]="wall.end.y - handleSize() / 2"
+            [attr.width]="handleSize()"
+            [attr.height]="handleSize()"
+            fill="var(--accent)"
+            stroke="#0d1117"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+          />
+        }
+
+        @if (wallPreview(); as preview) {
+          <line
+            [attr.x1]="preview.start.x"
+            [attr.y1]="preview.start.y"
+            [attr.x2]="preview.end.x"
+            [attr.y2]="preview.end.y"
+            stroke="var(--accent)"
+            [attr.stroke-width]="0.1"
+            stroke-dasharray="0.12 0.08"
+            stroke-linecap="square"
+          />
+          <text
+            [attr.x]="preview.mid.x"
+            [attr.y]="preview.mid.y - labelSize()"
+            text-anchor="middle"
+            fill="var(--accent)"
+            [attr.font-size]="labelSize()"
+            font-weight="600"
+          >
+            {{ preview.length }}
+          </text>
+        }
+
+        @if (shapePreview(); as preview) {
+          @if (preview.kind === 'rect' || preview.kind === 'room') {
+            <rect
+              [attr.x]="preview.x"
+              [attr.y]="preview.y"
+              [attr.width]="preview.width"
+              [attr.height]="preview.depth"
+              fill="var(--accent)"
+              fill-opacity="0.16"
+              stroke="var(--accent)"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"
+            />
+          } @else {
+            <ellipse
+              [attr.cx]="preview.x + preview.width / 2"
+              [attr.cy]="preview.y + preview.depth / 2"
+              [attr.rx]="preview.width / 2"
+              [attr.ry]="preview.depth / 2"
+              fill="var(--accent)"
+              fill-opacity="0.16"
+              stroke="var(--accent)"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"
+            />
+          }
+          <text
+            [attr.x]="preview.x + preview.width / 2"
+            [attr.y]="preview.y - labelSize() * 0.4"
+            text-anchor="middle"
+            fill="var(--accent)"
+            [attr.font-size]="labelSize()"
+            font-weight="600"
+          >
+            {{ preview.label }}
+          </text>
+        }
+
+        @for (item of measurements(); track item.id) {
+          <g [attr.opacity]="item.selected ? 1 : 0.92">
+            <line
+              [attr.x1]="item.start.x"
+              [attr.y1]="item.start.y"
+              [attr.x2]="item.end.x"
+              [attr.y2]="item.end.y"
+              stroke="var(--measure)"
+              stroke-width="2"
+              vector-effect="non-scaling-stroke"
+            />
+            <line
+              [attr.x1]="item.start.x - item.tickDx"
+              [attr.y1]="item.start.y - item.tickDy"
+              [attr.x2]="item.start.x + item.tickDx"
+              [attr.y2]="item.start.y + item.tickDy"
+              stroke="var(--measure)"
+              stroke-width="2"
+              vector-effect="non-scaling-stroke"
+            />
+            <line
+              [attr.x1]="item.end.x - item.tickDx"
+              [attr.y1]="item.end.y - item.tickDy"
+              [attr.x2]="item.end.x + item.tickDx"
+              [attr.y2]="item.end.y + item.tickDy"
+              stroke="var(--measure)"
+              stroke-width="2"
+              vector-effect="non-scaling-stroke"
+            />
+            <text
+              [attr.x]="item.mid.x"
+              [attr.y]="item.mid.y - labelSize()"
+              text-anchor="middle"
+              fill="var(--measure)"
+              [attr.font-size]="labelSize()"
+              font-weight="600"
+            >
+              {{ item.lengthLabel }}
+            </text>
+          </g>
+        }
+
+        @if (selectedMeasurement(); as measurement) {
+          <rect
+            [attr.x]="measurement.start.x - handleSize() / 2"
+            [attr.y]="measurement.start.y - handleSize() / 2"
+            [attr.width]="handleSize()"
+            [attr.height]="handleSize()"
+            fill="var(--measure)"
+            stroke="#0d1117"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+          />
+          <rect
+            [attr.x]="measurement.end.x - handleSize() / 2"
+            [attr.y]="measurement.end.y - handleSize() / 2"
+            [attr.width]="handleSize()"
+            [attr.height]="handleSize()"
+            fill="var(--measure)"
+            stroke="#0d1117"
+            stroke-width="1"
+            vector-effect="non-scaling-stroke"
+          />
+        }
+
+        @if (scalePreview(); as preview) {
+          <line
+            [attr.x1]="preview.start.x"
+            [attr.y1]="preview.start.y"
+            [attr.x2]="preview.end.x"
+            [attr.y2]="preview.end.y"
+            stroke="var(--snap)"
+            stroke-width="2"
+            vector-effect="non-scaling-stroke"
+          />
+          <circle [attr.cx]="preview.start.x" [attr.cy]="preview.start.y" [attr.r]="handleSize() * 0.45" fill="var(--snap)" />
+          <circle [attr.cx]="preview.end.x" [attr.cy]="preview.end.y" [attr.r]="handleSize() * 0.45" fill="var(--snap)" />
+          <text
+            [attr.x]="preview.mid.x"
+            [attr.y]="preview.mid.y - labelSize()"
+            text-anchor="middle"
+            fill="var(--snap)"
+            [attr.font-size]="labelSize()"
+            font-weight="600"
+          >
+            {{ preview.length }}
+          </text>
+        }
+
+        @if (measurePreview(); as preview) {
+          <line
+            [attr.x1]="preview.start.x"
+            [attr.y1]="preview.start.y"
+            [attr.x2]="preview.end.x"
+            [attr.y2]="preview.end.y"
+            stroke="var(--measure)"
+            stroke-width="2"
+            vector-effect="non-scaling-stroke"
+          />
+          <line
+            [attr.x1]="preview.start.x - preview.tickDx"
+            [attr.y1]="preview.start.y - preview.tickDy"
+            [attr.x2]="preview.start.x + preview.tickDx"
+            [attr.y2]="preview.start.y + preview.tickDy"
+            stroke="var(--measure)"
+            stroke-width="2"
+            vector-effect="non-scaling-stroke"
+          />
+          <line
+            [attr.x1]="preview.end.x - preview.tickDx"
+            [attr.y1]="preview.end.y - preview.tickDy"
+            [attr.x2]="preview.end.x + preview.tickDx"
+            [attr.y2]="preview.end.y + preview.tickDy"
+            stroke="var(--measure)"
+            stroke-width="2"
+            vector-effect="non-scaling-stroke"
+          />
+          <text
+            [attr.x]="preview.mid.x"
+            [attr.y]="preview.mid.y - labelSize()"
+            text-anchor="middle"
+            fill="var(--measure)"
+            [attr.font-size]="labelSize()"
+            font-weight="600"
+          >
+            {{ preview.lengthLabel }}
+          </text>
+        }
+
+        @if (boxSelect(); as box) {
+          <rect
+            [attr.x]="box.x"
+            [attr.y]="box.y"
+            [attr.width]="box.width"
+            [attr.height]="box.depth"
+            [attr.fill]="box.fill"
+            fill-opacity="0.16"
+            [attr.stroke]="box.stroke"
+            stroke-width="1.5"
+            [attr.stroke-dasharray]="box.dash"
+            vector-effect="non-scaling-stroke"
+          />
+        }
+
+        @if (snap(); as snapHit) {
+          @if (snapHit.snapped) {
+            <circle
+              [attr.cx]="snapHit.point.x"
+              [attr.cy]="snapHit.point.y"
+              [attr.r]="handleSize() * 0.55"
+              fill="none"
+              stroke="var(--snap)"
+              stroke-width="2"
+              vector-effect="non-scaling-stroke"
+            />
+          }
+        }
+      </g>
+    </svg>
+
+    @if (isEmpty()) {
+      <div class="empty">
+        <div>
+          <h2>Import a floor plan image</h2>
+          <p>
+            Drop an image onto the canvas, then use Scale and mark a known wall length so
+            everything is in real-world units.
+          </p>
+        </div>
+      </div>
+    }
+
+    <div class="hud">
+      <div class="hud-group">
+        <span class="chip">{{ cursorLabel() }}</span>
+        <span class="chip">{{ snapLabel() }}</span>
+        @for (category of legend(); track category.id) {
+          <span class="chip">
+            <span class="legend-dot" [style.background]="category.color"></span>
+            {{ category.label }}
+          </span>
+        }
+      </div>
+      <div class="hud-group">
+        <span class="chip">{{ zoomLabel() }}</span>
+        <span class="chip">{{ scaleLabel() }}</span>
+      </div>
+    </div>
+  `,
+})
+export class Canvas {
+  protected readonly store = inject(PlannerStore);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly viewport = viewChild.required<ElementRef<SVGSVGElement>>('viewport');
+  private readonly bgImage = viewChild<ElementRef<SVGImageElement>>('bgImage');
+
+  private readonly viewportSize = signal({ width: 800, height: 600 });
+  private readonly drag = signal<DragState>({ type: 'none' });
+  protected readonly wallStart = signal<Point | null>(null);
+  protected readonly scaleP1 = signal<Point | null>(null);
+  protected readonly measureP1 = signal<Point | null>(null);
+  protected readonly cursor = signal<Point | null>(null);
+  protected readonly snap = signal<SnapResult>({
+    point: { x: 0, y: 0 },
+    snapped: false,
+    kind: 'none',
+  });
+
+  private lastFitToken = 0;
+
+  protected readonly zoom = computed(() => this.store.plan().viewport.zoom);
+  protected readonly labelSize = computed(() => 12 / this.zoom());
+  protected readonly handleSize = computed(() => 8 / this.zoom());
+  protected readonly imageWidth = computed(() => this.store.imageSizeMeters()?.width ?? 0);
+  protected readonly imageHeight = computed(() => this.store.imageSizeMeters()?.height ?? 0);
+  protected readonly selectedWall = this.store.selectedWall;
+  protected readonly selectedObject = this.store.selectedObject;
+  protected readonly selectedRoom = this.store.selectedRoom;
+  protected readonly selectedMeasurement = this.store.selectedMeasurement;
+
+  protected readonly viewBox = computed(() => {
+    const { panX, panY, zoom } = this.store.plan().viewport;
+    const { width, height } = this.viewportSize();
+    return `${panX} ${panY} ${width / zoom} ${height / zoom}`;
+  });
+
+  protected readonly grid = computed(() => {
+    const { panX, panY, zoom } = this.store.plan().viewport;
+    const { width, height } = this.viewportSize();
+    const worldW = width / zoom;
+    const worldH = height / zoom;
+    const minorStep = pickGridStep(zoom);
+    const majorStep = minorStep * (minorStep < 1 ? 4 : 5);
+    return {
+      left: panX,
+      top: panY,
+      right: panX + worldW,
+      bottom: panY + worldH,
+      minor: axisLines(panX, panY, worldW, worldH, minorStep),
+      major: axisLines(panX, panY, worldW, worldH, majorStep),
+    };
+  });
+
+  protected readonly drawList = computed(() => {
+    const plan = this.store.plan();
+    const items: DrawItem[] = [];
+    for (const layer of plan.layers) {
+      if (!layer.visible) {
+        continue;
+      }
+      for (const room of plan.rooms) {
+        if (room.layerId !== layer.id) {
+          continue;
+        }
+        const info = ROOM_CATEGORY_MAP.get(room.category);
+        items.push({
+          key: `room-${room.id}`,
+          kind: 'room',
+          room,
+          fill: info?.color ?? '#7d8799',
+          stroke: info?.color ?? '#7d8799',
+        });
+      }
+      for (const wall of plan.walls) {
+        if (wall.layerId !== layer.id) {
+          continue;
+        }
+        items.push({ key: `wall-${wall.id}`, kind: 'wall', wall });
+      }
+      for (const obj of plan.objects) {
+        if (obj.layerId !== layer.id) {
+          continue;
+        }
+        items.push({
+          key: `obj-${obj.id}`,
+          kind: 'object',
+          obj,
+          fill: OBJECT_COLORS[obj.kind],
+        });
+      }
+    }
+    return items;
+  });
+
+  protected readonly isEmpty = computed(() => {
+    const plan = this.store.plan();
+    return (
+      !this.store.imageDataUrl() &&
+      plan.walls.length === 0 &&
+      plan.objects.length === 0 &&
+      plan.rooms.length === 0
+    );
+  });
+
+  protected readonly legend = computed(() => {
+    const ids = usedRoomCategories(this.store.plan().rooms);
+    return ids
+      .map((id) => ROOM_CATEGORY_MAP.get(id))
+      .filter((item): item is NonNullable<typeof item> => item != null);
+  });
+
+  protected readonly cssCursor = computed(() => {
+    const drag = this.drag();
+    if (drag.type === 'pan') {
+      return 'grabbing';
+    }
+    if (this.store.spaceHeld() || this.store.tool() === 'pan') {
+      return 'grab';
+    }
+    if (this.drag().type === 'rotate-objects') {
+      return 'grabbing';
+    }
+    if (this.store.tool() === 'select') {
+      return 'default';
+    }
+    return 'crosshair';
+  });
+
+  protected readonly wallPreview = computed(() => {
+    const start = this.wallStart();
+    const end = this.snap().point;
+    if (!start || this.store.tool() !== 'wall') {
+      return null;
+    }
+    if (this.drag().type === 'pan') {
+      return null;
+    }
+    return {
+      start,
+      end,
+      mid: midpoint(start, end),
+      length: formatLength(dist(start, end), this.store.lengthUnit()),
+    };
+  });
+
+  protected readonly shapePreview = computed(() => {
+    const drag = this.drag();
+    const current = this.cursor() ?? this.snap().point;
+    if (drag.type === 'draw-shape') {
+      const rect = previewShape(drag.kind, drag.start, current);
+      return {
+        ...rect,
+        kind: drag.kind,
+        label: `${formatLength(rect.width, this.store.lengthUnit())} × ${formatLength(rect.depth, this.store.lengthUnit())}`,
+      };
+    }
+    if (drag.type === 'draw-room') {
+      const rect = normalizeRect(drag.start, current);
+      return {
+        ...rect,
+        kind: 'room' as const,
+        label: `${formatLength(rect.width, this.store.lengthUnit())} × ${formatLength(rect.depth, this.store.lengthUnit())}`,
+      };
+    }
+    return null;
+  });
+
+  protected readonly scalePreview = computed(() => {
+    const p1 = this.scaleP1();
+    if (!p1 || this.store.tool() !== 'scale') {
+      return null;
+    }
+    const raw = this.snap().snapped ? this.snap().point : (this.cursor() ?? p1);
+    const p2 = this.constrainOrthoPoint(p1, raw, this.store.altHeld());
+    return {
+      start: p1,
+      end: p2,
+      mid: midpoint(p1, p2),
+      length: formatLength(dist(p1, p2), this.store.lengthUnit()),
+    };
+  });
+
+  protected readonly measurePreview = computed(() => {
+    const p1 = this.measureP1();
+    if (!p1 || this.store.tool() !== 'measure') {
+      return null;
+    }
+    const raw = this.snap().snapped ? this.snap().point : (this.cursor() ?? p1);
+    const p2 = this.constrainOrthoPoint(p1, raw, this.store.altHeld());
+    return dimensionView(p1, p2, this.handleSize() * 0.9, this.store.lengthUnit());
+  });
+
+  protected readonly measurements = computed(() => {
+    const selectedIds = new Set(this.highlightedMeasurements().map((item) => item.id));
+    const tick = this.handleSize() * 0.9;
+    return (this.store.plan().measurements ?? []).map((item) => ({
+      ...dimensionView(item.start, item.end, tick, this.store.lengthUnit()),
+      id: item.id,
+      selected: selectedIds.has(item.id),
+    }));
+  });
+
+  protected readonly cursorLabel = computed(() => {
+    const point = this.cursor();
+    if (!point) {
+      return '—';
+    }
+    const unit = this.store.lengthUnit();
+    const x = metersToDisplay(point.x, unit);
+    const y = metersToDisplay(point.y, unit);
+    const digits = unit === 'cm' ? 1 : 2;
+    return `${x.toFixed(digits)} ${unit}, ${y.toFixed(digits)} ${unit}`;
+  });
+
+  protected readonly hoverPick = computed(() => {
+    const drag = this.drag();
+    if (drag.type !== 'box-select') {
+      return null;
+    }
+    const rect = normalizeRect(drag.start, drag.current);
+    if (rect.width * this.zoom() < 4 && rect.depth * this.zoom() < 4) {
+      return null;
+    }
+    const pick = collectBoxSelection(this.store.plan(), drag.start, drag.current);
+    if (!drag.additive) {
+      return pick;
+    }
+    return {
+      objectIds: uniqueIds([
+        ...pick.objectIds,
+        ...this.store.selectedObjects().map((obj) => obj.id),
+      ]),
+      wallIds: uniqueIds([...pick.wallIds, ...this.store.selectedWalls().map((wall) => wall.id)]),
+      roomIds: uniqueIds([...pick.roomIds, ...this.store.selectedRooms().map((room) => room.id)]),
+      measurementIds: uniqueIds([
+        ...pick.measurementIds,
+        ...this.store.selectedMeasurements().map((item) => item.id),
+      ]),
+    };
+  });
+
+  protected readonly highlightedObjects = computed(() => {
+    const hover = this.hoverPick();
+    if (!hover) {
+      return this.store.selectedObjects();
+    }
+    const ids = new Set(hover.objectIds);
+    return this.store.plan().objects.filter((obj) => ids.has(obj.id));
+  });
+
+  protected readonly highlightedWalls = computed(() => {
+    const hover = this.hoverPick();
+    if (!hover) {
+      return this.store.selectedWalls();
+    }
+    const ids = new Set(hover.wallIds);
+    return this.store.plan().walls.filter((wall) => ids.has(wall.id));
+  });
+
+  protected readonly highlightedRooms = computed(() => {
+    const hover = this.hoverPick();
+    if (!hover) {
+      return this.store.selectedRooms();
+    }
+    const ids = new Set(hover.roomIds);
+    return this.store.plan().rooms.filter((room) => ids.has(room.id));
+  });
+
+  protected readonly highlightedMeasurements = computed(() => {
+    const hover = this.hoverPick();
+    if (!hover) {
+      return this.store.selectedMeasurements();
+    }
+    const ids = new Set(hover.measurementIds);
+    return (this.store.plan().measurements ?? []).filter((item) => ids.has(item.id));
+  });
+
+  protected readonly rotateHandles = computed(() => {
+    if (this.drag().type === 'box-select') {
+      return [];
+    }
+    const objects = this.store.selectedObjects();
+    if (objects.length === 0) {
+      return [];
+    }
+    if (objects.length === 1) {
+      return rotationHandles(objects[0], this.zoom());
+    }
+    const box = itemsBBox(objects);
+    return box ? rotationHandlesFromBox(box, this.zoom()) : [];
+  });
+
+  protected readonly boxSelect = computed(() => {
+    const drag = this.drag();
+    if (drag.type !== 'box-select') {
+      return null;
+    }
+    const rect = normalizeRect(drag.start, drag.current);
+    const windowMode = boxSelectMode(drag.start, drag.current) === 'window';
+    return {
+      ...rect,
+      fill: windowMode ? 'var(--window-select)' : 'var(--crossing-select)',
+      stroke: windowMode ? 'var(--window-select)' : 'var(--crossing-select)',
+      dash: windowMode ? null : '8 5',
+    };
+  });
+
+  protected readonly groupBounds = computed(() => {
+    if (this.drag().type === 'box-select') {
+      return null;
+    }
+    const objects = this.store.selectedObjects();
+    if (objects.length < 2) {
+      return null;
+    }
+    return itemsBBox(objects);
+  });
+
+  protected readonly snapLabel = computed(() => {
+    if (this.drag().type === 'rotate-objects' && this.store.altHeld()) {
+      return '45° snap (Alt)';
+    }
+    if (this.store.altHeld()) {
+      return '90° snap (Alt)';
+    }
+    if (this.store.tool() === 'select' && this.store.ctrlHeld()) {
+      const snap = this.snap();
+      if (snap.snapped && snap.kind === 'object-corner') {
+        return 'Snap: object corner';
+      }
+      if (snap.snapped && (snap.kind === 'edge' || snap.kind === 'endpoint')) {
+        return 'Snap: wall';
+      }
+      return 'Corner snap (Ctrl)';
+    }
+    if (this.store.shiftHeld()) {
+      return 'Snap off (Shift)';
+    }
+    const snap = this.snap();
+    if (snap.snapped && snap.kind === 'object-corner') {
+      return 'Snap: object corner';
+    }
+    if (snap.snapped && snap.kind === 'endpoint') {
+      return 'Snap: endpoint';
+    }
+    if (snap.snapped && snap.kind === 'edge') {
+      return 'Snap: edge';
+    }
+    return 'Snap on';
+  });
+
+  protected readonly zoomLabel = computed(() => {
+    const pct = Math.round((this.zoom() / 40) * 100);
+    return `${pct}%`;
+  });
+
+  protected readonly scaleLabel = computed(() => {
+    const background = this.store.plan().background;
+    if (!background) {
+      return 'No image';
+    }
+    return background.calibrated ? 'Scaled' : 'Not calibrated';
+  });
+
+  constructor() {
+    afterNextRender(() => {
+      const el = this.viewport().nativeElement;
+      const resize = () => {
+        const rect = el.getBoundingClientRect();
+        this.viewportSize.set({ width: rect.width, height: rect.height });
+        this.store.reportViewSize(rect.width, rect.height);
+      };
+      const observer = new ResizeObserver(resize);
+      observer.observe(el);
+      resize();
+
+      const onWheel = (event: WheelEvent) => {
+        event.preventDefault();
+        const world = this.clientToWorld(event);
+        const offset = this.clientOffset(event);
+        const zoom = this.store.plan().viewport.zoom;
+        const factor = Math.exp(-event.deltaY * 0.0015);
+        this.store.zoomAround(world, offset, zoom * factor);
+      };
+      el.addEventListener('wheel', onWheel, { passive: false });
+
+      this.destroyRef.onDestroy(() => {
+        observer.disconnect();
+        el.removeEventListener('wheel', onWheel);
+      });
+    });
+
+    afterRenderEffect({
+      earlyRead: () => ({
+        el: this.bgImage()?.nativeElement ?? null,
+        url: this.store.imageDataUrl(),
+      }),
+      write: (value) => {
+        const { el, url } = value();
+        if (!el) {
+          return;
+        }
+        if (url) {
+          el.setAttribute('href', url);
+          el.setAttributeNS('http://www.w3.org/1999/xlink', 'href', url);
+        } else {
+          el.removeAttribute('href');
+          el.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
+        }
+      },
+    });
+
+    effect(() => {
+      const token = this.store.fitToken();
+      const size = this.viewportSize();
+      if (token === 0 || token === this.lastFitToken || size.width < 20) {
+        return;
+      }
+      this.lastFitToken = token;
+      this.store.reportViewSize(size.width, size.height);
+      this.store.fitToView();
+    });
+
+    effect(() => {
+      this.store.tool();
+      this.wallStart.set(null);
+      this.scaleP1.set(null);
+      this.measureP1.set(null);
+    });
+  }
+
+  cancelDraft(): void {
+    this.drag.set({ type: 'none' });
+    this.wallStart.set(null);
+    this.scaleP1.set(null);
+    this.measureP1.set(null);
+  }
+
+  protected onDragOver(event: DragEvent): void {
+    event.preventDefault();
+  }
+
+  protected async onDrop(event: DragEvent): Promise<void> {
+    event.preventDefault();
+    const file = event.dataTransfer?.files.item(0);
+    if (file?.type.startsWith('image/')) {
+      try {
+        await this.store.importImageFile(file);
+      } catch {
+        this.store.setStatus('Could not import that image.');
+      }
+    }
+  }
+
+  protected onPointerDown(event: PointerEvent): void {
+    if (!this.store.ready()) {
+      return;
+    }
+    const svg = this.viewport().nativeElement;
+    svg.setPointerCapture(event.pointerId);
+
+    if (event.button === 2) {
+      this.cancelDraft();
+      return;
+    }
+
+    const world = this.clientToWorld(event);
+    this.cursor.set(world);
+    const snapped = this.computeSnap(event);
+    this.snap.set(snapped);
+
+    if (event.button === 1 || this.store.spaceHeld() || this.store.tool() === 'pan') {
+      const viewport = this.store.plan().viewport;
+      this.drag.set({
+        type: 'pan',
+        startX: event.clientX,
+        startY: event.clientY,
+        panX: viewport.panX,
+        panY: viewport.panY,
+      });
+      return;
+    }
+
+    if (event.button !== 0) {
+      return;
+    }
+
+    const tool = this.store.tool();
+
+    if (tool === 'scale') {
+      const p1 = this.scaleP1();
+      if (!p1) {
+        this.scaleP1.set({ ...snapped.point });
+        this.store.setStatus('Click the other end of the known length · hold Alt for 90°');
+      } else {
+        const end = this.constrainOrthoPoint(
+          p1,
+          snapped.point,
+          event.altKey || this.store.altHeld(),
+        );
+        this.store.openScaleDialog(p1, end);
+        this.scaleP1.set(null);
+      }
+      return;
+    }
+
+    if (tool === 'measure') {
+      const p1 = this.measureP1();
+      if (!p1) {
+        this.measureP1.set({ ...snapped.point });
+        this.store.setStatus('Click the other end to measure · hold Alt for 90°');
+      } else {
+        const end = this.constrainOrthoPoint(
+          p1,
+          snapped.point,
+          event.altKey || this.store.altHeld(),
+        );
+        this.store.addMeasurement(p1, end);
+        this.measureP1.set(null);
+      }
+      return;
+    }
+
+    if (tool === 'wall') {
+      const start = this.wallStart();
+      if (!start) {
+        this.wallStart.set({ ...snapped.point });
+      } else {
+        const wall = this.store.addWall(start, snapped.point);
+        if (wall) {
+          this.wallStart.set({ ...snapped.point });
+        }
+      }
+      return;
+    }
+
+    if (tool === 'rect' || tool === 'circle' || tool === 'ellipse') {
+      this.drag.set({ type: 'draw-shape', kind: tool, start: world });
+      return;
+    }
+
+    if (tool === 'room') {
+      this.drag.set({ type: 'draw-room', start: world });
+      return;
+    }
+
+    if (tool === 'select') {
+      const hit = hitTest(this.store.plan(), world, this.store.plan().viewport.zoom, this.store.selection());
+      if (!hit) {
+        this.drag.set({
+          type: 'box-select',
+          start: world,
+          current: world,
+          additive: event.shiftKey || this.store.shiftHeld(),
+        });
+        return;
+      }
+      if (hit.type === 'rotate-object' || hit.type === 'rotate-objects') {
+        const targets = this.store.selectedObjects();
+        if (targets.length === 0) {
+          return;
+        }
+        const box = itemsBBox(targets);
+        const center =
+          targets.length === 1 ? objectCenter(targets[0]) : box
+            ? { x: box.x + box.width / 2, y: box.y + box.depth / 2 }
+            : objectCenter(targets[0]);
+        this.drag.set({
+          type: 'rotate-objects',
+          orig: targets.map((obj) => ({
+            id: obj.id,
+            x: obj.x,
+            y: obj.y,
+            width: obj.width,
+            depth: obj.depth,
+            rotation: obj.rotation ?? 0,
+          })),
+          startAngle: angleDeg(center, world),
+          center,
+          recorded: false,
+        });
+        return;
+      }
+      if (hit.type === 'wall-end') {
+        this.store.setSelection({ type: 'wall', id: hit.id });
+        this.drag.set({ type: 'move-wall-end', id: hit.id, end: hit.end, recorded: false });
+        return;
+      }
+      if (hit.type === 'measurement-end') {
+        this.store.setSelection({ type: 'measurement', id: hit.id });
+        this.drag.set({
+          type: 'move-measurement-end',
+          id: hit.id,
+          end: hit.end,
+          recorded: false,
+        });
+        return;
+      }
+      if (hit.type === 'measurement') {
+        const measurement = this.store.plan().measurements.find((item) => item.id === hit.id);
+        if (!measurement) {
+          return;
+        }
+        this.store.setSelection({ type: 'measurement', id: measurement.id });
+        this.drag.set({
+          type: 'move-measurement',
+          id: measurement.id,
+          origStart: { ...measurement.start },
+          origEnd: { ...measurement.end },
+          start: world,
+          recorded: false,
+        });
+        return;
+      }
+      if (hit.type === 'object') {
+        const obj = this.store.plan().objects.find((item) => item.id === hit.id);
+        if (!obj) {
+          return;
+        }
+        const additive = event.shiftKey || this.store.shiftHeld();
+        if (additive || !this.store.isObjectSelected(obj.id)) {
+          this.store.selectObject(obj.id, additive);
+        }
+        const targets = this.store.selectedObjects();
+        if (targets.length === 0) {
+          this.drag.set({ type: 'none' });
+          return;
+        }
+        this.drag.set({
+          type: 'move-objects',
+          orig: targets.map((item) => ({ id: item.id, x: item.x, y: item.y })),
+          start: world,
+          recorded: false,
+        });
+        return;
+      }
+      if (hit.type === 'room') {
+        const room = this.store.plan().rooms.find((item) => item.id === hit.id);
+        if (!room) {
+          return;
+        }
+        this.store.setSelection({ type: 'room', id: room.id });
+        this.drag.set({
+          type: 'move-room',
+          id: room.id,
+          origX: room.x,
+          origY: room.y,
+          start: world,
+          recorded: false,
+        });
+        return;
+      }
+      const wall = this.store.plan().walls.find((item) => item.id === hit.id);
+      if (!wall) {
+        return;
+      }
+      this.store.setSelection({ type: 'wall', id: wall.id });
+      this.drag.set({
+        type: 'move-wall',
+        id: wall.id,
+        origStart: { ...wall.start },
+        origEnd: { ...wall.end },
+        start: world,
+        recorded: false,
+      });
+    }
+  }
+
+  protected onPointerMove(event: PointerEvent): void {
+    const world = this.clientToWorld(event);
+    this.cursor.set(world);
+    const snapped = this.computeSnap(event);
+    this.snap.set(snapped);
+
+    const drag = this.drag();
+    if (drag.type === 'box-select') {
+      this.drag.set({ ...drag, current: world });
+      return;
+    }
+    if (drag.type === 'pan') {
+      const zoom = this.store.plan().viewport.zoom;
+      this.store.setViewport({
+        panX: drag.panX - (event.clientX - drag.startX) / zoom,
+        panY: drag.panY - (event.clientY - drag.startY) / zoom,
+        zoom,
+      });
+      return;
+    }
+
+    const moveThreshold = 3 / this.store.plan().viewport.zoom;
+
+    const alt = event.altKey || this.store.altHeld();
+
+    if (drag.type === 'rotate-objects') {
+      const rawDelta = angleDeg(drag.center, world) - drag.startAngle;
+      const delta =
+        alt && drag.orig.length === 1
+          ? snapAngle(drag.orig[0].rotation + rawDelta, 45) - drag.orig[0].rotation
+          : alt
+            ? snapAngle(rawDelta, 45)
+            : rawDelta;
+      if (!drag.recorded && Math.abs(delta) < 0.5) {
+        return;
+      }
+      if (!drag.recorded) {
+        this.store.captureHistory();
+        this.drag.set({ ...drag, recorded: true });
+      }
+      this.store.applyObjectPoses(
+        drag.orig.map((item) => ({
+          id: item.id,
+          ...rotatedObjectPose(item, drag.center, delta),
+        })),
+      );
+      return;
+    }
+
+    if (drag.type === 'move-objects') {
+      const rawDx = world.x - drag.start.x;
+      const rawDy = world.y - drag.start.y;
+      if (!drag.recorded && Math.hypot(rawDx, rawDy) < moveThreshold) {
+        return;
+      }
+      if (!drag.recorded) {
+        this.store.captureHistory();
+        this.drag.set({ ...drag, recorded: true });
+      }
+      let { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
+      const ctrl = event.ctrlKey || this.store.ctrlHeld();
+      if (ctrl) {
+        const snappedMove = this.objectMoveSnap(drag.orig, dx, dy);
+        if (snappedMove.snapped) {
+          if (alt) {
+            if (dy === 0) {
+              dx += snappedMove.dx;
+            } else if (dx === 0) {
+              dy += snappedMove.dy;
+            }
+          } else {
+            dx += snappedMove.dx;
+            dy += snappedMove.dy;
+          }
+          this.snap.set({
+            point: snappedMove.point,
+            snapped: true,
+            kind: snappedMove.kind,
+          });
+        }
+      }
+      this.store.applyObjectPoses(
+        drag.orig.map((item) => ({ id: item.id, x: item.x + dx, y: item.y + dy })),
+      );
+      return;
+    }
+
+    if (drag.type === 'move-room') {
+      const rawDx = world.x - drag.start.x;
+      const rawDy = world.y - drag.start.y;
+      if (!drag.recorded && Math.hypot(rawDx, rawDy) < moveThreshold) {
+        return;
+      }
+      if (!drag.recorded) {
+        this.store.captureHistory();
+        this.drag.set({ ...drag, recorded: true });
+      }
+      const { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
+      this.store.updateRoom(drag.id, { x: drag.origX + dx, y: drag.origY + dy });
+      return;
+    }
+
+    if (drag.type === 'move-wall') {
+      const rawDx = world.x - drag.start.x;
+      const rawDy = world.y - drag.start.y;
+      if (!drag.recorded && Math.hypot(rawDx, rawDy) < moveThreshold) {
+        return;
+      }
+      if (!drag.recorded) {
+        this.store.captureHistory();
+        this.drag.set({ ...drag, recorded: true });
+      }
+      const { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
+      this.store.updateWall(drag.id, {
+        start: { x: drag.origStart.x + dx, y: drag.origStart.y + dy },
+        end: { x: drag.origEnd.x + dx, y: drag.origEnd.y + dy },
+      });
+      return;
+    }
+
+    if (drag.type === 'move-wall-end') {
+      if (!drag.recorded) {
+        this.store.captureHistory();
+        this.drag.set({ ...drag, recorded: true });
+      }
+      const wall = this.store.plan().walls.find((item) => item.id === drag.id);
+      const origin = drag.end === 'start' ? wall?.end : wall?.start;
+      const point = origin
+        ? this.constrainOrthoPoint(origin, snapped.point, alt)
+        : snapped.point;
+      if (drag.end === 'start') {
+        this.store.updateWall(drag.id, { start: { ...point } });
+      } else {
+        this.store.updateWall(drag.id, { end: { ...point } });
+      }
+      return;
+    }
+
+    if (drag.type === 'move-measurement') {
+      const rawDx = world.x - drag.start.x;
+      const rawDy = world.y - drag.start.y;
+      if (!drag.recorded && Math.hypot(rawDx, rawDy) < moveThreshold) {
+        return;
+      }
+      if (!drag.recorded) {
+        this.store.captureHistory();
+        this.drag.set({ ...drag, recorded: true });
+      }
+      const { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
+      this.store.updateMeasurement(drag.id, {
+        start: { x: drag.origStart.x + dx, y: drag.origStart.y + dy },
+        end: { x: drag.origEnd.x + dx, y: drag.origEnd.y + dy },
+      });
+      return;
+    }
+
+    if (drag.type === 'move-measurement-end') {
+      if (!drag.recorded) {
+        this.store.captureHistory();
+        this.drag.set({ ...drag, recorded: true });
+      }
+      const origin =
+        drag.end === 'start'
+          ? this.store.plan().measurements.find((item) => item.id === drag.id)?.end
+          : this.store.plan().measurements.find((item) => item.id === drag.id)?.start;
+      const point = origin
+        ? this.constrainOrthoPoint(origin, snapped.point, event.altKey || this.store.altHeld())
+        : snapped.point;
+      if (drag.end === 'start') {
+        this.store.updateMeasurement(drag.id, { start: { ...point } });
+      } else {
+        this.store.updateMeasurement(drag.id, { end: { ...point } });
+      }
+    }
+  }
+
+  protected onPointerUp(event: PointerEvent): void {
+    const drag = this.drag();
+    const world = this.clientToWorld(event);
+
+    if (drag.type === 'draw-shape') {
+      const rect = previewShape(drag.kind, drag.start, world);
+      this.store.addObject(drag.kind, rect.x, rect.y, rect.width, rect.depth);
+    } else if (drag.type === 'draw-room') {
+      const rect = normalizeRect(drag.start, world);
+      const width = Math.max(rect.width, 0.4);
+      const depth = Math.max(rect.depth, 0.4);
+      this.store.addRoom(rect.x, rect.y, width, depth);
+      this.store.setTool('select');
+    } else if (drag.type === 'box-select') {
+      const zoom = this.store.plan().viewport.zoom;
+      const size = Math.hypot(world.x - drag.start.x, world.y - drag.start.y);
+      if (size < 4 / zoom) {
+        if (!drag.additive) {
+          this.store.setSelection(null);
+        }
+      } else {
+        this.store.selectBox(collectBoxSelection(this.store.plan(), drag.start, world), drag.additive);
+      }
+    }
+
+    this.drag.set({ type: 'none' });
+  }
+
+  protected rotateTransform(obj: PlacedObject): string {
+    const rotation = obj.rotation ?? 0;
+    const cx = obj.x + obj.width / 2;
+    const cy = obj.y + obj.depth / 2;
+    return `rotate(${rotation} ${cx} ${cy})`;
+  }
+
+  private objectMoveSnap(
+    orig: readonly { id: string; x: number; y: number }[],
+    dx: number,
+    dy: number,
+  ) {
+    const plan = this.store.plan();
+    const hidden = new Set(plan.layers.filter((layer) => !layer.visible).map((layer) => layer.id));
+    const movingIds = new Set(orig.map((item) => item.id));
+    const byId = new Map(plan.objects.map((obj) => [obj.id, obj]));
+    const moving = orig.flatMap((item) => {
+      const live = byId.get(item.id);
+      return live ? [{ ...live, x: item.x + dx, y: item.y + dy }] : [];
+    });
+    const others = plan.objects.filter((obj) => !movingIds.has(obj.id) && !hidden.has(obj.layerId));
+    const walls = plan.walls.filter((wall) => !hidden.has(wall.layerId));
+    const zoom = plan.viewport.zoom;
+    return snapObjectMove(moving, walls, others, SNAP_PIXELS / zoom);
+  }
+
+  private constrainOrthoPoint(origin: Point, point: Point, altHeld: boolean): Point {
+    return altHeld ? snapToRightAngle(origin, point) : point;
+  }
+
+  private orthoDelta(dx: number, dy: number, altHeld: boolean): { dx: number; dy: number } {
+    if (!altHeld) {
+      return { dx, dy };
+    }
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return { dx, dy: 0 };
+    }
+    return { dx: 0, dy };
+  }
+
+  private computeSnap(event: PointerEvent): SnapResult {
+    const world = this.clientToWorld(event);
+    const tool = this.store.tool();
+    const drag = this.drag();
+    const wantsSnap =
+      tool === 'wall' ||
+      tool === 'scale' ||
+      tool === 'measure' ||
+      drag.type === 'move-wall-end' ||
+      drag.type === 'move-measurement-end';
+    const shift = event.shiftKey || this.store.shiftHeld();
+    const zoom = this.store.plan().viewport.zoom;
+    const ignoreWallId = drag.type === 'move-wall-end' ? drag.id : undefined;
+    const enabled = wantsSnap && !shift;
+    const plan = this.store.plan();
+    if (tool === 'measure' || drag.type === 'move-measurement-end') {
+      const hidden = new Set(plan.layers.filter((layer) => !layer.visible).map((layer) => layer.id));
+      return snapToGeometry(
+        world,
+        plan.walls.filter((wall) => !hidden.has(wall.layerId)),
+        plan.objects.filter((obj) => !hidden.has(obj.layerId)),
+        SNAP_PIXELS / zoom,
+        enabled,
+      );
+    }
+    return snapToWalls(world, plan.walls, SNAP_PIXELS / zoom, enabled, ignoreWallId);
+  }
+
+  private clientToWorld(event: { clientX: number; clientY: number }): Point {
+    const rect = this.viewport().nativeElement.getBoundingClientRect();
+    const { panX, panY, zoom } = this.store.plan().viewport;
+    return {
+      x: panX + (event.clientX - rect.left) / zoom,
+      y: panY + (event.clientY - rect.top) / zoom,
+    };
+  }
+
+  private clientOffset(event: { clientX: number; clientY: number }): Point {
+    const rect = this.viewport().nativeElement.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+}
+
+function uniqueIds(ids: string[]): string[] {
+  return [...new Set(ids)];
+}
+
+type DrawItem =
+  | { key: string; kind: 'room'; room: import('../../models/floor-plan').Room; fill: string; stroke: string }
+  | { key: string; kind: 'wall'; wall: import('../../models/floor-plan').Wall }
+  | { key: string; kind: 'object'; obj: import('../../models/floor-plan').PlacedObject; fill: string };
+
+function pickGridStep(zoom: number): number {
+  const targetMeters = 48 / zoom;
+  const steps = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50];
+  return steps.find((step) => step >= targetMeters) ?? 50;
+}
+
+function axisLines(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  step: number,
+): { vertical: number[]; horizontal: number[] } {
+  const vertical: number[] = [];
+  const horizontal: number[] = [];
+  const x0 = Math.floor(x / step) * step;
+  const y0 = Math.floor(y / step) * step;
+  const xEnd = x + width + step;
+  const yEnd = y + height + step;
+  for (let value = x0; value <= xEnd; value += step) {
+    vertical.push(Number(value.toFixed(6)));
+  }
+  for (let value = y0; value <= yEnd; value += step) {
+    horizontal.push(Number(value.toFixed(6)));
+  }
+  return { vertical, horizontal };
+}
+
+function previewShape(
+  kind: ShapeKind,
+  start: Point,
+  current: Point,
+): { x: number; y: number; width: number; depth: number } {
+  const rect = normalizeRect(start, current);
+  if (rect.width < 0.05 && rect.depth < 0.05) {
+    if (kind === 'circle') {
+      return { x: start.x - 0.3, y: start.y - 0.3, width: 0.6, depth: 0.6 };
+    }
+    return { x: start.x - 0.4, y: start.y - 0.4, width: 0.8, depth: 0.8 };
+  }
+  if (kind === 'circle') {
+    const diameter = Math.max(0.05, Math.min(rect.width, rect.depth));
+    return { x: rect.x, y: rect.y, width: diameter, depth: diameter };
+  }
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: Math.max(0.05, rect.width),
+    depth: Math.max(0.05, rect.depth),
+  };
+}

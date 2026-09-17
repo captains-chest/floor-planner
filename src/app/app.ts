@@ -1,16 +1,15 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Component } from '@angular/core';
+import { Planner } from './planner/planner';
 
 @Component({
-  imports: [RouterOutlet],
+  imports: [Planner],
   selector: 'app-root',
-  styles: [],
-  template: `
-    <h1>Hello, {{ title() }}</h1>
-
-    <router-outlet />
+  styles: `
+    :host {
+      display: block;
+      height: 100%;
+    }
   `,
+  template: `<app-planner />`,
 })
-export class App {
-  protected readonly title = signal('floor-planner');
-}
+export class App {}

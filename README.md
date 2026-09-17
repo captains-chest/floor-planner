@@ -1,59 +1,25 @@
-# FloorPlanner
+# Floor planner
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.8.
+A browser floor-planning tool. Import a scanned or photographed plan, scale it from a known wall length, then draw walls, rooms, and simple furniture. Everything is stored locally in this browser (IndexedDB). Switch the toolbar **Units** control between meters and centimetres for both display and input.
 
-## Development server
-
-To start a local development server, run:
+## Run
 
 ```bash
-ng serve
+pnpm start
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Open `http://localhost:4200/`.
 
-## Code scaffolding
+## Workflow
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+1. **Import image** — load a floor-plan scan, or drop an image onto the canvas.
+2. **Scale** — click two ends of a length printed on the drawing (often a wall), then enter the real distance (`4.25`, `425 cm`, or `4250 mm`). Hold **Alt** to snap the measure line to horizontal or vertical.
+3. **Measure** (`M`) — click two points to drop a dimension line. Snaps to walls; hold **Alt** for 90°. Select and delete measurements like other items.
+4. **Walls** — click corners to draw. Nearby wall ends and edges snap; hold **Shift** to disable snap. **Esc** or right-click ends the chain.
+5. **Rooms** — drag a rectangle and set a category (kitchen, bedroom, …) in the inspector.
+6. **Objects** — place rectangles, circles, and ellipses. Set width and depth in meters; drag to move them afterwards. Shift+click to select several, then **Group** (`Ctrl+G`) so a sofa (or any set of parts) moves and rotates together. Drag a corner handle to rotate; **Alt** snaps to 45°. **Ungroup** with `Ctrl+Shift+G`.
+7. **Layers** — show, hide, lock, and reorder. New items go on the active layer.
 
-```bash
-ng generate component component-name
-```
+Pan with the Pan tool, middle mouse, or **Space**. Scroll to zoom toward the cursor. **Fit** frames the plan.
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
-ng generate --help
-```
-
-## Building
-
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+State is saved automatically on this device. Undo / redo: `Ctrl+Z` / `Ctrl+Y`.

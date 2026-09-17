@@ -1,0 +1,245 @@
+import { Component, inject } from '@angular/core';
+import { Tool } from '../../models/floor-plan';
+import { PlannerStore } from '../../core/planner-store';
+
+interface ToolButton {
+  id: Tool;
+  label: string;
+  shortcut: string;
+}
+
+@Component({
+  selector: 'app-toolbar',
+  styles: `
+    :host {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      min-height: 52px;
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 140px;
+    }
+
+    .brand span {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .brand input {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font: inherit;
+      font-weight: 600;
+      padding: 0;
+      width: 160px;
+    }
+
+    .brand input:focus {
+      outline: none;
+      border-bottom: 1px solid var(--accent);
+    }
+
+    .group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .split {
+      width: 1px;
+      align-self: stretch;
+      background: var(--border);
+      margin: 4px 4px;
+    }
+
+    button {
+      background: var(--bg-panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+    }
+
+    button.active {
+      background: color-mix(in srgb, var(--accent) 22%, var(--bg-panel-2));
+      border-color: var(--accent);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    kbd {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-left: 6px;
+    }
+
+    .grow {
+      flex: 1;
+    }
+
+    .units {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .units span {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-right: 2px;
+    }
+
+    .units button {
+      min-width: 2.4rem;
+      padding: 6px 8px;
+    }
+  `,
+  template: `
+    <label class="brand">
+      <span>Floor planner</span>
+      <input
+        [value]="store.plan().name"
+        (change)="rename($event)"
+        aria-label="Plan name"
+      />
+    </label>
+
+    <div class="split"></div>
+
+    <div class="group">
+      <button type="button" (click)="fileInput.click()">Import image</button>
+      <input
+        #fileInput
+        type="file"
+        accept="image/*"
+        hidden
+        (change)="onFile($event)"
+      />
+    </div>
+
+    <div class="split"></div>
+
+    <div class="group" role="toolbar" aria-label="Tools">
+      @for (tool of tools; track tool.id) {
+        <button
+          type="button"
+          [class.active]="store.tool() === tool.id"
+          [attr.aria-pressed]="store.tool() === tool.id"
+          [title]="tool.label + ' (' + tool.shortcut + ')'"
+          (click)="store.setTool(tool.id)"
+        >
+          {{ tool.label }}
+          <kbd>{{ tool.shortcut }}</kbd>
+        </button>
+      }
+    </div>
+
+    <div class="grow"></div>
+
+    <div class="units" role="group" aria-label="Length unit">
+      <span>Units</span>
+      <button
+        type="button"
+        [class.active]="store.lengthUnit() === 'm'"
+        [attr.aria-pressed]="store.lengthUnit() === 'm'"
+        (click)="store.setLengthUnit('m')"
+      >
+        m
+      </button>
+      <button
+        type="button"
+        [class.active]="store.lengthUnit() === 'cm'"
+        [attr.aria-pressed]="store.lengthUnit() === 'cm'"
+        (click)="store.setLengthUnit('cm')"
+      >
+        cm
+      </button>
+    </div>
+
+    <div class="split"></div>
+
+    <div class="group">
+      <button
+        type="button"
+        [disabled]="!store.canGroup()"
+        (click)="store.groupSelection()"
+        title="Group (Ctrl+G)"
+      >
+        Group
+      </button>
+      <button
+        type="button"
+        [disabled]="!store.canUngroup()"
+        (click)="store.ungroupSelection()"
+        title="Ungroup (Ctrl+Shift+G)"
+      >
+        Ungroup
+      </button>
+      <button type="button" [disabled]="!store.canUndo()" (click)="store.undo()" title="Undo (Ctrl+Z)">
+        Undo
+      </button>
+      <button type="button" [disabled]="!store.canRedo()" (click)="store.redo()" title="Redo (Ctrl+Y)">
+        Redo
+      </button>
+      <button type="button" (click)="store.zoomBy(1 / 1.15)" title="Zoom out">−</button>
+      <button type="button" (click)="store.zoomBy(1.15)" title="Zoom in">+</button>
+      <button type="button" (click)="store.fitToView()" title="Fit (Ctrl+0)">Fit</button>
+    </div>
+  `,
+})
+export class Toolbar {
+  protected readonly store = inject(PlannerStore);
+
+  protected readonly tools: ToolButton[] = [
+    { id: 'select', label: 'Select', shortcut: 'V' },
+    { id: 'pan', label: 'Pan', shortcut: 'H' },
+    { id: 'scale', label: 'Scale', shortcut: 'S' },
+    { id: 'measure', label: 'Measure', shortcut: 'M' },
+    { id: 'wall', label: 'Wall', shortcut: 'W' },
+    { id: 'rect', label: 'Rect', shortcut: 'R' },
+    { id: 'circle', label: 'Circle', shortcut: 'C' },
+    { id: 'ellipse', label: 'Ellipse', shortcut: 'E' },
+    { id: 'room', label: 'Room', shortcut: 'G' },
+  ];
+
+  protected rename(event: Event): void {
+    const value = (event.target as HTMLInputElement).value.trim();
+    this.store.setName(value || 'Floor plan');
+  }
+
+  protected async onFile(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.item(0);
+    if (file) {
+      try {
+        await this.store.importImageFile(file);
+      } catch {
+        this.store.setStatus('Could not import that image.');
+      }
+    }
+    input.value = '';
+  }
+}
