@@ -19,6 +19,7 @@ Open `http://localhost:4200/`.
 5. **Rooms** — drag a rectangle and set a category (kitchen, bedroom, …) in the inspector.
 6. **Objects** — place rectangles, circles, and ellipses. Set width and depth in meters; drag to move them afterwards. Shift+click to select several, then **Group** (`Ctrl+G`) so a sofa (or any set of parts) moves and rotates together. Drag a corner handle to rotate; **Alt** snaps to 45°. **Ungroup** with `Ctrl+Shift+G`.
 7. **Layers** — show, hide, lock, and reorder. New items go on the active layer.
+8. **Export / Import project** — download a `.floorplan.json` file with the drawing, background image, and scale. **Import project** restores it.
 
 Pan with the Pan tool, middle mouse, or **Space**. Scroll to zoom toward the cursor. **Fit** frames the plan.
 

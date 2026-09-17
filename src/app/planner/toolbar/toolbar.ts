@@ -138,6 +138,19 @@ interface ToolButton {
         hidden
         (change)="onFile($event)"
       />
+      <button type="button" (click)="exportProject()" title="Download the full plan, image, and scale">
+        Export
+      </button>
+      <button type="button" (click)="projectInput.click()" title="Open a previously exported project">
+        Import project
+      </button>
+      <input
+        #projectInput
+        type="file"
+        accept=".json,application/json"
+        hidden
+        (change)="onProjectFile($event)"
+      />
     </div>
 
     <div class="split"></div>
@@ -238,6 +251,31 @@ export class Toolbar {
         await this.store.importImageFile(file);
       } catch {
         this.store.setStatus('Could not import that image.');
+      }
+    }
+    input.value = '';
+  }
+
+  protected exportProject(): void {
+    const { filename, json } = this.store.exportProject();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+    this.store.setStatus('Project exported.');
+  }
+
+  protected async onProjectFile(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.item(0);
+    if (file) {
+      try {
+        await this.store.importProjectFile(file);
+      } catch {
+        this.store.setStatus('Could not import that project file.');
       }
     }
     input.value = '';

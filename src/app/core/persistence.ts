@@ -84,6 +84,39 @@ export class Persistence {
   }
 }
 
+export const PROJECT_KIND = 'floor-planner-project';
+
+export interface ProjectDocument extends PersistedState {
+  kind: typeof PROJECT_KIND;
+  formatVersion: 1;
+  exportedAt: string;
+}
+
+export function serializeProject(state: PersistedState): ProjectDocument {
+  return {
+    kind: PROJECT_KIND,
+    formatVersion: 1,
+    exportedAt: new Date().toISOString(),
+    plan: state.plan,
+    imageDataUrl: state.imageDataUrl,
+    lengthUnit: state.lengthUnit,
+  };
+}
+
+export function parseProjectDocument(raw: unknown): PersistedState | null {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const record = raw as { kind?: unknown; plan?: unknown };
+  if (record.kind != null && record.kind !== PROJECT_KIND) {
+    return null;
+  }
+  if (record.plan == null || typeof record.plan !== 'object') {
+    return null;
+  }
+  return normalizeState(raw);
+}
+
 function normalizeState(raw: unknown): PersistedState | null {
   if (!raw || typeof raw !== 'object') {
     return null;

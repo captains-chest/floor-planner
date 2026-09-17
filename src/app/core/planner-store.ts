@@ -29,7 +29,7 @@ import {
   selectedPlacedObjects,
 } from './geometry';
 import { measureImage, readFileAsDataUrl } from './image';
-import { Persistence } from './persistence';
+import { parseProjectDocument, Persistence, serializeProject } from './persistence';
 import { formatLength, type LengthUnit } from './units';
 
 export interface ScaleDialog {
@@ -309,6 +309,42 @@ export class PlannerStore {
 
   setLengthUnit(unit: LengthUnit): void {
     this._lengthUnit.set(unit);
+  }
+
+  exportProject(): { filename: string; json: string } {
+    const document = serializeProject({
+      plan: this._plan(),
+      imageDataUrl: this._imageDataUrl(),
+      lengthUnit: this._lengthUnit(),
+    });
+    return {
+      filename: `${fileSlug(this._plan().name)}.floorplan.json`,
+      json: JSON.stringify(document),
+    };
+  }
+
+  async importProjectFile(file: File): Promise<void> {
+    const text = await file.text();
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text) as unknown;
+    } catch {
+      throw new Error('Invalid project file');
+    }
+    const parsed = parseProjectDocument(raw);
+    if (!parsed) {
+      throw new Error('Not a floor planner project');
+    }
+    this.captureHistory();
+    this._plan.set(parsed.plan);
+    this._imageDataUrl.set(parsed.imageDataUrl);
+    this._lengthUnit.set(parsed.lengthUnit);
+    this._selection.set(null);
+    this._scaleDialog.set(null);
+    this.future = [];
+    this.setTool('select');
+    this._fitToken.update((token) => token + 1);
+    this._status.set('Project imported.');
   }
 
   reportViewSize(width: number, height: number): void {
@@ -980,6 +1016,15 @@ function collapsePick(plan: FloorPlan, pick: BoxPick): Selection {
     roomIds: pick.roomIds,
     measurementIds: pick.measurementIds,
   };
+}
+
+function fileSlug(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'floor-plan';
 }
 
 function defaultGroupName(plan: FloorPlan): string {
