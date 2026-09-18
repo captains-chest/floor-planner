@@ -1,12 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { Tool } from '../../models/floor-plan';
 import { PlannerStore } from '../../core/planner-store';
-
-interface ToolButton {
-  id: Tool;
-  label: string;
-  shortcut: string;
-}
 
 @Component({
   selector: 'app-toolbar',
@@ -90,12 +83,6 @@ interface ToolButton {
       cursor: default;
     }
 
-    kbd {
-      font-size: 10px;
-      color: var(--text-dim);
-      margin-left: 6px;
-    }
-
     .grow {
       flex: 1;
     }
@@ -122,28 +109,26 @@ interface ToolButton {
   template: `
     <label class="brand">
       <span>Floor planner</span>
-      <input
-        [value]="store.plan().name"
-        (change)="rename($event)"
-        aria-label="Plan name"
-      />
+      <input [value]="store.plan().name" (change)="rename($event)" aria-label="Plan name" />
     </label>
 
     <div class="split"></div>
 
     <div class="group">
       <button type="button" (click)="fileInput.click()">Import image</button>
-      <input
-        #fileInput
-        type="file"
-        accept="image/*"
-        hidden
-        (change)="onFile($event)"
-      />
-      <button type="button" (click)="exportProject()" title="Download the full plan, image, and scale">
+      <input #fileInput type="file" accept="image/*" hidden (change)="onFile($event)" />
+      <button
+        type="button"
+        (click)="exportProject()"
+        title="Download the full plan, image, and scale"
+      >
         Export
       </button>
-      <button type="button" (click)="projectInput.click()" title="Open a previously exported project">
+      <button
+        type="button"
+        (click)="projectInput.click()"
+        title="Open a previously exported project"
+      >
         Import project
       </button>
       <input
@@ -153,23 +138,6 @@ interface ToolButton {
         hidden
         (change)="onProjectFile($event)"
       />
-    </div>
-
-    <div class="split"></div>
-
-    <div class="group" role="toolbar" aria-label="Tools">
-      @for (tool of tools; track tool.id) {
-        <button
-          type="button"
-          [class.active]="store.tool() === tool.id"
-          [attr.aria-pressed]="store.tool() === tool.id"
-          [title]="tool.label + ' (' + tool.shortcut + ')'"
-          (click)="store.setTool(tool.id)"
-        >
-          {{ tool.label }}
-          <kbd>{{ tool.shortcut }}</kbd>
-        </button>
-      }
     </div>
 
     <div class="grow"></div>
@@ -229,10 +197,20 @@ interface ToolButton {
       >
         Paste
       </button>
-      <button type="button" [disabled]="!store.canUndo()" (click)="store.undo()" title="Undo (Ctrl+Z)">
+      <button
+        type="button"
+        [disabled]="!store.canUndo()"
+        (click)="store.undo()"
+        title="Undo (Ctrl+Z)"
+      >
         Undo
       </button>
-      <button type="button" [disabled]="!store.canRedo()" (click)="store.redo()" title="Redo (Ctrl+Y)">
+      <button
+        type="button"
+        [disabled]="!store.canRedo()"
+        (click)="store.redo()"
+        title="Redo (Ctrl+Y)"
+      >
         Redo
       </button>
       <button type="button" (click)="store.zoomBy(1 / 1.15)" title="Zoom out">−</button>
@@ -243,18 +221,6 @@ interface ToolButton {
 })
 export class Toolbar {
   protected readonly store = inject(PlannerStore);
-
-  protected readonly tools: ToolButton[] = [
-    { id: 'select', label: 'Select', shortcut: 'V' },
-    { id: 'pan', label: 'Pan', shortcut: 'H' },
-    { id: 'scale', label: 'Scale', shortcut: 'S' },
-    { id: 'measure', label: 'Measure', shortcut: 'M' },
-    { id: 'wall', label: 'Wall', shortcut: 'W' },
-    { id: 'rect', label: 'Rect', shortcut: 'R' },
-    { id: 'circle', label: 'Circle', shortcut: 'C' },
-    { id: 'ellipse', label: 'Ellipse', shortcut: 'E' },
-    { id: 'room', label: 'Room', shortcut: 'G' },
-  ];
 
   protected rename(event: Event): void {
     const value = (event.target as HTMLInputElement).value.trim();

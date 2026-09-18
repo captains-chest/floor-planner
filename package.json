@@ -16,6 +16,8 @@
     "@angular/forms": "^22.1.0",
     "@angular/platform-browser": "^22.1.0",
     "@angular/router": "^22.1.0",
+    "@captains-chest/material-symbols-rounded-icons": "^2.1.2",
+    "@captains-chest/material-symbols-rounded-icons-filled": "^2.1.2",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },

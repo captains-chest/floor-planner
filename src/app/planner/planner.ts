@@ -6,10 +6,11 @@ import { Canvas } from './canvas/canvas';
 import { Inspector } from './inspector/inspector';
 import { LayerPanel } from './layer-panel/layer-panel';
 import { Toolbar } from './toolbar/toolbar';
+import { Toolbox } from './toolbox/toolbox';
 
 @Component({
   selector: 'app-planner',
-  imports: [Toolbar, Canvas, LayerPanel, Inspector],
+  imports: [Toolbar, Toolbox, Canvas, LayerPanel, Inspector],
   host: {
     '(document:keydown)': 'onKeyDown($event)',
     '(document:keyup)': 'onKeyUp($event)',
@@ -19,7 +20,7 @@ import { Toolbar } from './toolbar/toolbar';
     :host {
       display: grid;
       grid-template-rows: auto 1fr auto;
-      grid-template-columns: 240px minmax(0, 1fr) max-content;
+      grid-template-columns: auto minmax(0, 1fr) 240px max-content;
       height: 100%;
       background: var(--bg);
       color: var(--text);
@@ -30,6 +31,7 @@ import { Toolbar } from './toolbar/toolbar';
       grid-column: 1 / -1;
     }
 
+    app-toolbox,
     app-canvas,
     app-layer-panel,
     app-inspector {
@@ -138,18 +140,28 @@ import { Toolbar } from './toolbar/toolbar';
       <div class="boot">Loading saved plan…</div>
     } @else {
       <app-toolbar />
-      <app-layer-panel />
+      <app-toolbox />
       <app-canvas />
+      <app-layer-panel />
       <app-inspector />
       <div class="status">
         <span>{{ store.status() }}</span>
-        <span>Units: {{ store.lengthUnit() }} · Shift: no wall snap · Alt: 90° · Ctrl: corner snap · Space: pan</span>
+        <span
+          >Units: {{ store.lengthUnit() }} · Shift: no wall snap · Alt: 90° · Ctrl: corner snap ·
+          Space: pan</span
+        >
       </div>
     }
 
     @if (store.scaleDialog(); as dialog) {
       <div class="modal-backdrop" (click)="cancelScale()">
-        <form class="modal" role="dialog" aria-labelledby="scale-title" (click)="$event.stopPropagation()" (submit)="applyScale($event, length.value)">
+        <form
+          class="modal"
+          role="dialog"
+          aria-labelledby="scale-title"
+          (click)="$event.stopPropagation()"
+          (submit)="applyScale($event, length.value)"
+        >
           <h2 id="scale-title">Set scale</h2>
           <p>
             Marked length on the plan:
@@ -166,7 +178,10 @@ import { Toolbar } from './toolbar/toolbar';
               [placeholder]="scalePlaceholder()"
             />
           </label>
-          <p>Bare numbers use {{ store.lengthUnit() }}. You can also type a unit: <code>m</code>, <code>cm</code>, or <code>mm</code>.</p>
+          <p>
+            Bare numbers use {{ store.lengthUnit() }}. You can also type a unit: <code>m</code>,
+            <code>cm</code>, or <code>mm</code>.
+          </p>
           @if (scaleError()) {
             <p class="error">{{ scaleError() }}</p>
           }
