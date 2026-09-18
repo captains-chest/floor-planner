@@ -29,3 +29,61 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  image:
+    name: Container image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          pull: true
+          tags: floor-planner:ci
+
+      - name: Smoke-test image
+        run: |
+          set -euo pipefail
+          docker run -d --name floor-planner \
+            --read-only \
+            --tmpfs /run \
+            --tmpfs /var/lib/nginx/tmp \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            -p 127.0.0.1:8080:8080 \
+            floor-planner:ci
+          trap 'docker logs floor-planner; docker rm -f floor-planner' EXIT
+
+          for _ in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8080/; then
+              break
+            fi
+            sleep 1
+          done
+
+          curl -fsS http://127.0.0.1:8080/ | grep -q 'Floor planner'
+          curl -fsS -o /dev/null http://127.0.0.1:8080/favicon.ico
+
+          js_path="$(curl -fsS http://127.0.0.1:8080/ | sed -n 's/.*src="\([^"]*\.js\)".*/\1/p' | head -1)"
+          test -n "$js_path"
+          curl -fsS -o /dev/null "http://127.0.0.1:8080/${js_path#/}"
+
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/missing.abc123.js)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/does-not-exist)" = 200
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8080/)" = 405
+
+          headers="$(curl -sI http://127.0.0.1:8080/)"
+          echo "$headers" | grep -qi 'x-content-type-options: nosniff'
+          echo "$headers" | grep -qi 'content-security-policy:'
+          echo "$headers" | grep -qi 'x-frame-options: SAMEORIGIN'
+
+          docker inspect --format '{{.Config.User}}' floor-planner:ci | grep -E '^(65532|nginx)'

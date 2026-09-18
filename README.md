@@ -10,6 +10,24 @@ pnpm start
 
 Open `http://localhost:4200/`.
 
+## Production image
+
+The app is a static Angular build served by Chainguard nginx on port 8080. `:latest` tags are an accepted risk.
+
+```bash
+docker build -t floor-planner .
+docker run --rm -p 8080:8080 \
+  --read-only \
+  --tmpfs /run \
+  --tmpfs /var/lib/nginx/tmp \
+  --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  floor-planner
+```
+
+Open `http://localhost:8080/`.
+
+
 ## Workflow
 
 1. **Import image** — load a floor-plan scan, or drop an image onto the canvas.

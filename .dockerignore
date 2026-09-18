@@ -1,0 +1,14 @@
+.git
+.github
+.vscode
+.angular
+.idea
+dist
+node_modules
+coverage
+tmp
+out-tsc
+**/.DS_Store
+*.md
+.prettierrc
+.gitignore
