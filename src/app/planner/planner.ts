@@ -272,6 +272,26 @@ export class Planner {
       }
       return;
     }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+      event.preventDefault();
+      this.store.copySelection();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v') {
+      event.preventDefault();
+      this.store.pasteClipboard();
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.code === 'BracketRight') {
+      event.preventDefault();
+      this.store.restackSelection(event.shiftKey ? 'front' : 'forward');
+      return;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.code === 'BracketLeft') {
+      event.preventDefault();
+      this.store.restackSelection(event.shiftKey ? 'back' : 'backward');
+      return;
+    }
 
     if (event.key === 'Escape') {
       this.canvas()?.cancelDraft();

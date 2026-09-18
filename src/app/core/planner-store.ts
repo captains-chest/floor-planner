@@ -20,14 +20,7 @@ import {
   Viewport,
   Wall,
 } from '../models/floor-plan';
-import {
-  BoxPick,
-  clamp,
-  contentBBox,
-  dist,
-  scalePoint,
-  selectedPlacedObjects,
-} from './geometry';
+import { BoxPick, clamp, contentBBox, dist, scalePoint, selectedPlacedObjects } from './geometry';
 import { measureImage, readFileAsDataUrl } from './image';
 import { parseProjectDocument, Persistence, serializeProject } from './persistence';
 import { formatLength, type LengthUnit } from './units';
@@ -38,11 +31,19 @@ export interface ScaleDialog {
   measured: number;
 }
 
+export type StackDirection = 'front' | 'back' | 'forward' | 'backward';
+
 const HISTORY_LIMIT = 50;
+const PASTE_OFFSET_METERS = 0.25;
 
 interface HistorySnapshot {
   plan: FloorPlan;
   imageDataUrl: string | null;
+}
+
+interface ObjectClipboard {
+  objects: PlacedObject[];
+  groups: ObjectGroup[];
 }
 
 @Service()
@@ -67,6 +68,8 @@ export class PlannerStore {
   private history: HistorySnapshot[] = [];
   private future: HistorySnapshot[] = [];
   private viewSize = { width: 1200, height: 800 };
+  private readonly _clipboard = signal<ObjectClipboard | null>(null);
+  private pasteGeneration = 0;
 
   readonly plan = this._plan.asReadonly();
   readonly imageDataUrl = this._imageDataUrl.asReadonly();
@@ -143,6 +146,18 @@ export class PlannerStore {
   readonly canGroup = computed(() => this.selectedObjects().length >= 2);
 
   readonly canUngroup = computed(() => this._selection()?.type === 'group');
+
+  readonly canCopy = computed(() => this.selectedObjects().length > 0);
+
+  readonly canPaste = computed(() => (this._clipboard()?.objects.length ?? 0) > 0);
+
+  readonly canBringToFront = computed(() => this.canRestack('front'));
+
+  readonly canSendToBack = computed(() => this.canRestack('back'));
+
+  readonly canBringForward = computed(() => this.canRestack('forward'));
+
+  readonly canSendBackward = computed(() => this.canRestack('backward'));
 
   readonly selectedWalls = computed(() => {
     const selection = this._selection();
@@ -549,9 +564,15 @@ export class PlannerStore {
       ...current,
       layers: remaining,
       activeLayerId: current.activeLayerId === id ? fallbackId : current.activeLayerId,
-      walls: current.walls.map((wall) => (wall.layerId === id ? { ...wall, layerId: fallbackId } : wall)),
-      objects: current.objects.map((obj) => (obj.layerId === id ? { ...obj, layerId: fallbackId } : obj)),
-      rooms: current.rooms.map((room) => (room.layerId === id ? { ...room, layerId: fallbackId } : room)),
+      walls: current.walls.map((wall) =>
+        wall.layerId === id ? { ...wall, layerId: fallbackId } : wall,
+      ),
+      objects: current.objects.map((obj) =>
+        obj.layerId === id ? { ...obj, layerId: fallbackId } : obj,
+      ),
+      rooms: current.rooms.map((room) =>
+        room.layerId === id ? { ...room, layerId: fallbackId } : room,
+      ),
     }));
   }
 
@@ -575,14 +596,23 @@ export class PlannerStore {
     return wall;
   }
 
-  updateWall(id: string, patch: Partial<Pick<Wall, 'start' | 'end' | 'thickness' | 'layerId'>>): void {
+  updateWall(
+    id: string,
+    patch: Partial<Pick<Wall, 'start' | 'end' | 'thickness' | 'layerId'>>,
+  ): void {
     this._plan.update((plan) => ({
       ...plan,
       walls: plan.walls.map((wall) => (wall.id === id ? { ...wall, ...patch } : wall)),
     }));
   }
 
-  addObject(kind: ShapeKind, x: number, y: number, width: number, depth: number): PlacedObject | null {
+  addObject(
+    kind: ShapeKind,
+    x: number,
+    y: number,
+    width: number,
+    depth: number,
+  ): PlacedObject | null {
     const layer = this.requireUnlockedActiveLayer();
     if (!layer) {
       return null;
@@ -677,6 +707,79 @@ export class PlannerStore {
     this._status.set(`Grouped ${members.length} objects. Drag a corner handle to rotate together.`);
   }
 
+  copySelection(): void {
+    const objects = this.selectedObjects();
+    if (objects.length === 0) {
+      this._status.set('Select objects to copy.');
+      return;
+    }
+    const groupIds = new Set(
+      objects.map((item) => item.groupId).filter((id): id is string => typeof id === 'string'),
+    );
+    this._clipboard.set({
+      objects: objects.map((obj) => ({ ...obj })),
+      groups: (this._plan().groups ?? [])
+        .filter((group) => groupIds.has(group.id))
+        .map((group) => ({ ...group })),
+    });
+    this.pasteGeneration = 0;
+    this._status.set(objects.length === 1 ? 'Copied 1 object' : `Copied ${objects.length} objects`);
+  }
+
+  pasteClipboard(): void {
+    const clipboard = this._clipboard();
+    if (!clipboard || clipboard.objects.length === 0) {
+      this._status.set('Nothing to paste.');
+      return;
+    }
+    const layer = this.requireUnlockedActiveLayer();
+    if (!layer) {
+      return;
+    }
+    this.pasteGeneration += 1;
+    const offset = PASTE_OFFSET_METERS * this.pasteGeneration;
+    const duplicated = duplicateClipboard(clipboard, { x: offset, y: offset }, layer.id);
+    this.captureHistory();
+    this._plan.update((plan) => ({
+      ...plan,
+      objects: [...plan.objects, ...duplicated.objects],
+      groups: [...(plan.groups ?? []), ...duplicated.groups],
+    }));
+    this._selection.set(
+      selectionFromObjectIds(
+        this._plan(),
+        duplicated.objects.map((obj) => obj.id),
+      ),
+    );
+    this.setTool('select');
+    this._status.set(
+      duplicated.objects.length === 1
+        ? 'Pasted 1 object'
+        : `Pasted ${duplicated.objects.length} objects`,
+    );
+  }
+
+  restackSelection(direction: StackDirection): void {
+    const ids = this.selectedObjects().map((obj) => obj.id);
+    if (ids.length === 0) {
+      this._status.set('Select objects to change order.');
+      return;
+    }
+    const objects = this._plan().objects;
+    const next = restackObjects(objects, ids, direction);
+    if (sameObjectOrder(objects, next)) {
+      this._status.set(
+        direction === 'front' || direction === 'forward'
+          ? 'Already at the front'
+          : 'Already at the back',
+      );
+      return;
+    }
+    this.captureHistory();
+    this._plan.update((plan) => ({ ...plan, objects: next }));
+    this._status.set(stackStatus(direction, ids.length));
+  }
+
   ungroupSelection(): void {
     const selection = this._selection();
     if (selection?.type !== 'group') {
@@ -709,11 +812,19 @@ export class PlannerStore {
     this.captureHistory();
     this._plan.update((plan) => ({
       ...plan,
-      groups: (plan.groups ?? []).map((group) => (group.id === id ? { ...group, name: trimmed } : group)),
+      groups: (plan.groups ?? []).map((group) =>
+        group.id === id ? { ...group, name: trimmed } : group,
+      ),
     }));
   }
 
-  addRoom(x: number, y: number, width: number, depth: number, category: RoomCategory = 'other'): Room | null {
+  addRoom(
+    x: number,
+    y: number,
+    width: number,
+    depth: number,
+    category: RoomCategory = 'other',
+  ): Room | null {
     const layer = this.requireUnlockedActiveLayer();
     if (!layer) {
       return null;
@@ -753,13 +864,12 @@ export class PlannerStore {
     return measurement;
   }
 
-  updateMeasurement(
-    id: string,
-    patch: Partial<Pick<Measurement, 'start' | 'end'>>,
-  ): void {
+  updateMeasurement(id: string, patch: Partial<Pick<Measurement, 'start' | 'end'>>): void {
     this._plan.update((plan) => ({
       ...plan,
-      measurements: plan.measurements.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+      measurements: plan.measurements.map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
     }));
   }
 
@@ -898,6 +1008,15 @@ export class PlannerStore {
     this._ready.set(true);
     this._status.set(toolHint(this._tool()));
   }
+
+  private canRestack(direction: StackDirection): boolean {
+    const ids = this.selectedObjects().map((obj) => obj.id);
+    if (ids.length === 0) {
+      return false;
+    }
+    const objects = this._plan().objects;
+    return !sameObjectOrder(objects, restackObjects(objects, ids, direction));
+  }
 }
 
 export interface ObjectPose {
@@ -905,6 +1024,127 @@ export interface ObjectPose {
   x: number;
   y: number;
   rotation?: number;
+}
+
+function restackObjects(
+  objects: readonly PlacedObject[],
+  selectedIds: readonly string[],
+  direction: StackDirection,
+): PlacedObject[] {
+  const selected = new Set(selectedIds);
+  if (selected.size === 0) {
+    return [...objects];
+  }
+  const layerIds = new Set(objects.filter((obj) => selected.has(obj.id)).map((obj) => obj.layerId));
+  const next = [...objects];
+  for (const layerId of layerIds) {
+    const indices: number[] = [];
+    const items: PlacedObject[] = [];
+    for (let i = 0; i < next.length; i += 1) {
+      if (next[i].layerId === layerId) {
+        indices.push(i);
+        items.push(next[i]);
+      }
+    }
+    const restacked = restackLayerItems(items, selected, direction);
+    for (let i = 0; i < indices.length; i += 1) {
+      next[indices[i]] = restacked[i];
+    }
+  }
+  return next;
+}
+
+function restackLayerItems(
+  items: PlacedObject[],
+  selected: Set<string>,
+  direction: StackDirection,
+): PlacedObject[] {
+  const moving = items.filter((item) => selected.has(item.id));
+  if (moving.length === 0 || moving.length === items.length) {
+    return items;
+  }
+  if (direction === 'front') {
+    return [...items.filter((item) => !selected.has(item.id)), ...moving];
+  }
+  if (direction === 'back') {
+    return [...moving, ...items.filter((item) => !selected.has(item.id))];
+  }
+  const result = [...items];
+  if (direction === 'forward') {
+    for (let i = result.length - 2; i >= 0; i -= 1) {
+      if (selected.has(result[i].id) && !selected.has(result[i + 1].id)) {
+        const current = result[i];
+        result[i] = result[i + 1];
+        result[i + 1] = current;
+      }
+    }
+    return result;
+  }
+  for (let i = 1; i < result.length; i += 1) {
+    if (selected.has(result[i].id) && !selected.has(result[i - 1].id)) {
+      const current = result[i];
+      result[i] = result[i - 1];
+      result[i - 1] = current;
+    }
+  }
+  return result;
+}
+
+function sameObjectOrder(a: readonly PlacedObject[], b: readonly PlacedObject[]): boolean {
+  return a.length === b.length && a.every((obj, index) => obj.id === b[index].id);
+}
+
+function stackStatus(direction: StackDirection, count: number): string {
+  const noun = count === 1 ? 'object' : `${count} objects`;
+  switch (direction) {
+    case 'front':
+      return `Brought ${noun} to front`;
+    case 'back':
+      return `Sent ${noun} to back`;
+    case 'forward':
+      return `Brought ${noun} forward`;
+    case 'backward':
+      return `Sent ${noun} backward`;
+    default: {
+      const _never: never = direction;
+      return _never;
+    }
+  }
+}
+
+function duplicateClipboard(
+  clipboard: ObjectClipboard,
+  offset: Point,
+  layerId: string,
+): { objects: PlacedObject[]; groups: ObjectGroup[] } {
+  const groupIdMap = new Map<string, string>();
+  for (const obj of clipboard.objects) {
+    if (obj.groupId && !groupIdMap.has(obj.groupId)) {
+      groupIdMap.set(obj.groupId, createId('group'));
+    }
+  }
+  const groups = clipboard.groups
+    .filter((group) => groupIdMap.has(group.id))
+    .map((group) => ({
+      ...group,
+      id: groupIdMap.get(group.id) ?? group.id,
+    }));
+  const knownGroupIds = new Set(groups.map((group) => group.id));
+  for (const newId of groupIdMap.values()) {
+    if (!knownGroupIds.has(newId)) {
+      groups.push({ id: newId, name: 'Group' });
+      knownGroupIds.add(newId);
+    }
+  }
+  const objects = clipboard.objects.map((obj) => ({
+    ...obj,
+    id: createId('obj'),
+    layerId,
+    x: obj.x + offset.x,
+    y: obj.y + offset.y,
+    groupId: obj.groupId ? (groupIdMap.get(obj.groupId) ?? null) : null,
+  }));
+  return { objects, groups };
 }
 
 function selectionFromObjectIds(plan: FloorPlan, ids: string[]): Selection {
@@ -932,7 +1172,9 @@ function selectionFromObjectIds(plan: FloorPlan, ids: string[]): Selection {
 
 function removeObjects(plan: FloorPlan, ids: Set<string>): FloorPlan {
   const objects = plan.objects.filter((obj) => !ids.has(obj.id));
-  const usedGroups = new Set(objects.map((obj) => obj.groupId).filter((id): id is string => typeof id === 'string'));
+  const usedGroups = new Set(
+    objects.map((obj) => obj.groupId).filter((id): id is string => typeof id === 'string'),
+  );
   return {
     ...plan,
     objects,
@@ -1073,7 +1315,11 @@ function toolHint(tool: Tool): string {
   }
 }
 
-function sanitizeSize(kind: ShapeKind, width: number, depth: number): { width: number; depth: number } {
+function sanitizeSize(
+  kind: ShapeKind,
+  width: number,
+  depth: number,
+): { width: number; depth: number } {
   const w = Math.max(0.05, width);
   const d = Math.max(0.05, depth);
   if (kind === 'circle') {

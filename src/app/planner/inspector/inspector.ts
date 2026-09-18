@@ -9,9 +9,11 @@ import {
   inputMin,
   inputStep,
 } from '../../core/units';
+import { StackOrder } from './stack-order/stack-order';
 
 @Component({
   selector: 'app-inspector',
+  imports: [StackOrder],
   styles: `
     :host {
       display: flex;
@@ -125,16 +127,30 @@ import {
         <p class="metric">{{ store.selectedObjects().length }} objects</p>
         <p class="empty">Rotate and move the group together. Ungroup to edit pieces.</p>
         <button type="button" class="action" (click)="store.ungroupSelection()">Ungroup</button>
+        <button type="button" class="action" (click)="store.copySelection()">Copy group</button>
+        <app-stack-order />
         <button class="danger" type="button" (click)="store.deleteSelection()">Delete group</button>
       } @else if (store.selection()?.type === 'multi') {
         <p class="metric">{{ store.selectionCount() }} items selected</p>
         @if (store.canGroup()) {
-          <button type="button" class="action" (click)="store.groupSelection()">Group objects</button>
+          <button type="button" class="action" (click)="store.groupSelection()">
+            Group objects
+          </button>
         }
-        <button class="danger" type="button" (click)="store.deleteSelection()">Delete selected</button>
+        @if (store.canCopy()) {
+          <button type="button" class="action" (click)="store.copySelection()">Copy objects</button>
+        }
+        @if (store.selectedObjects().length > 0) {
+          <app-stack-order />
+        }
+        <button class="danger" type="button" (click)="store.deleteSelection()">
+          Delete selected
+        </button>
       } @else if (store.selectedObjects().length > 1) {
         <p class="metric">{{ store.selectedObjects().length }} objects selected</p>
         <button type="button" class="action" (click)="store.groupSelection()">Group</button>
+        <button type="button" class="action" (click)="store.copySelection()">Copy</button>
+        <app-stack-order />
       } @else if (store.selectedObject(); as obj) {
         <label>
           Name
@@ -182,14 +198,20 @@ import {
             }
           </select>
         </label>
-        <button class="danger" type="button" (click)="store.deleteSelection()">Delete object</button>
+        <button type="button" class="action" (click)="store.copySelection()">Copy object</button>
+        <app-stack-order />
+        <button class="danger" type="button" (click)="store.deleteSelection()">
+          Delete object
+        </button>
       } @else if (store.selectedMeasurement(); as measurement) {
         <p class="metric">Length: {{ format(dist(measurement.start, measurement.end)) }}</p>
         <p class="metric">
           Δx {{ format(abs(measurement.end.x - measurement.start.x)) }} · Δy
           {{ format(abs(measurement.end.y - measurement.start.y)) }}
         </p>
-        <button class="danger" type="button" (click)="store.deleteSelection()">Delete measurement</button>
+        <button class="danger" type="button" (click)="store.deleteSelection()">
+          Delete measurement
+        </button>
       } @else if (store.selectedWall(); as wall) {
         <p class="metric">Length: {{ format(dist(wall.start, wall.end)) }}</p>
         <label>
@@ -349,7 +371,12 @@ export class Inspector {
     this.store.updateWall(wall.id, { layerId: this.inputValue(event) });
   }
 
-  protected patchRoom(patch: { name?: string; width?: number; depth?: number; layerId?: string }): void {
+  protected patchRoom(patch: {
+    name?: string;
+    width?: number;
+    depth?: number;
+    layerId?: string;
+  }): void {
     const room = this.store.selectedRoom();
     if (!room) {
       return;

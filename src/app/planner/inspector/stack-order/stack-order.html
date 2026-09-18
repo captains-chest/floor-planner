@@ -1,0 +1,36 @@
+<div class="row">
+  <button
+    type="button"
+    [disabled]="!store.canBringToFront()"
+    title="Bring to front (Ctrl+Shift+])"
+    (click)="store.restackSelection('front')"
+  >
+    Bring to front
+  </button>
+  <button
+    type="button"
+    [disabled]="!store.canSendToBack()"
+    title="Send to back (Ctrl+Shift+[)"
+    (click)="store.restackSelection('back')"
+  >
+    Send to back
+  </button>
+</div>
+<div class="row">
+  <button
+    type="button"
+    [disabled]="!store.canBringForward()"
+    title="Bring forward (Ctrl+])"
+    (click)="store.restackSelection('forward')"
+  >
+    Bring forward
+  </button>
+  <button
+    type="button"
+    [disabled]="!store.canSendBackward()"
+    title="Send backward (Ctrl+[)"
+    (click)="store.restackSelection('backward')"
+  >
+    Send backward
+  </button>
+</div>

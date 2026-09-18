@@ -13,8 +13,10 @@ interface ToolButton {
   styles: `
     :host {
       display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: 10px;
+      row-gap: 8px;
       padding: 8px 12px;
       background: var(--bg-panel);
       border-bottom: 1px solid var(--border);
@@ -210,6 +212,22 @@ interface ToolButton {
         title="Ungroup (Ctrl+Shift+G)"
       >
         Ungroup
+      </button>
+      <button
+        type="button"
+        [disabled]="!store.canCopy()"
+        (click)="store.copySelection()"
+        title="Copy selected objects (Ctrl+C)"
+      >
+        Copy
+      </button>
+      <button
+        type="button"
+        [disabled]="!store.canPaste()"
+        (click)="store.pasteClipboard()"
+        title="Paste objects (Ctrl+V)"
+      >
+        Paste
       </button>
       <button type="button" [disabled]="!store.canUndo()" (click)="store.undo()" title="Undo (Ctrl+Z)">
         Undo
