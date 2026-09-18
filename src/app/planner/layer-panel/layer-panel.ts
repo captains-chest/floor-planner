@@ -8,7 +8,7 @@ import { PlannerStore } from '../../core/planner-store';
       display: flex;
       flex-direction: column;
       background: var(--bg-panel);
-      border-right: 1px solid var(--border);
+      border-left: 1px solid var(--border);
       min-width: 220px;
       min-height: 0;
     }
