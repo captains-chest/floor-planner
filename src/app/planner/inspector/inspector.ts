@@ -348,7 +348,6 @@ export class Inspector {
     if (patch.rotation != null && !Number.isFinite(patch.rotation)) {
       return;
     }
-    this.store.captureHistory();
     this.store.updateObject(obj.id, patch);
   }
 
@@ -358,7 +357,6 @@ export class Inspector {
     if (!wall || !(thickness > 0)) {
       return;
     }
-    this.store.captureHistory();
     this.store.updateWall(wall.id, { thickness });
   }
 
@@ -367,7 +365,6 @@ export class Inspector {
     if (!wall) {
       return;
     }
-    this.store.captureHistory();
     this.store.updateWall(wall.id, { layerId: this.inputValue(event) });
   }
 
@@ -387,7 +384,6 @@ export class Inspector {
     if (patch.depth != null && !(patch.depth > 0)) {
       return;
     }
-    this.store.captureHistory();
     this.store.updateRoom(room.id, patch);
   }
 
@@ -397,7 +393,6 @@ export class Inspector {
     if (!room) {
       return;
     }
-    this.store.captureHistory();
     this.store.updateRoom(room.id, { category });
   }
 }

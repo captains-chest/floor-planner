@@ -226,11 +226,6 @@ export class Planner {
   }
 
   protected onKeyDown(event: KeyboardEvent): void {
-    this.store.setAltHeld(event.altKey);
-    this.store.setCtrlHeld(event.ctrlKey);
-    if (event.key === 'Shift') {
-      this.store.setShiftHeld(true);
-    }
     if (event.key === 'Alt' && !isTypingTarget(event.target)) {
       event.preventDefault();
     }
@@ -310,7 +305,7 @@ export class Planner {
 
     if (event.key === 'Escape') {
       this.canvas()?.cancelDraft();
-      this.store.setSelection(null);
+      this.store.clearSelection();
       this.store.setStatus('Cancelled');
       return;
     }
@@ -330,26 +325,12 @@ export class Planner {
   }
 
   protected onKeyUp(event: KeyboardEvent): void {
-    this.store.setAltHeld(event.altKey);
-    this.store.setCtrlHeld(event.ctrlKey);
-    if (event.key === 'Shift') {
-      this.store.setShiftHeld(false);
-    }
-    if (event.key === 'Alt') {
-      this.store.setAltHeld(false);
-    }
-    if (event.key === 'Control') {
-      this.store.setCtrlHeld(false);
-    }
     if (event.key === ' ') {
       this.store.setSpaceHeld(false);
     }
   }
 
   protected onWindowBlur(): void {
-    this.store.setAltHeld(false);
-    this.store.setShiftHeld(false);
-    this.store.setCtrlHeld(false);
     this.store.setSpaceHeld(false);
   }
 }
