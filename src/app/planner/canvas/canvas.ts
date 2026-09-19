@@ -20,8 +20,6 @@ import {
 } from '../../models/floor-plan';
 import {
   angleDeg,
-  boxSelectMode,
-  collectBoxSelection,
   dimensionView,
   dist,
   hitTest,
@@ -91,6 +89,11 @@ type DragState =
 
 @Component({
   selector: 'app-canvas',
+  host: {
+    '(document:keydown)': 'onModifierDown($event)',
+    '(document:keyup)': 'onModifierUp($event)',
+    '(window:blur)': 'onModifierBlur()',
+  },
   styles: `
     :host {
       display: block;
@@ -708,7 +711,9 @@ export class Canvas {
     kind: 'none',
   });
 
-  private lastFitToken = 0;
+  private readonly shiftHeld = signal(false);
+  private readonly altHeld = signal(false);
+  private readonly ctrlHeld = signal(false);
 
   protected readonly zoom = computed(() => this.store.plan().viewport.zoom);
   protected readonly labelSize = computed(() => 12 / this.zoom());
@@ -863,7 +868,7 @@ export class Canvas {
       return null;
     }
     const raw = this.snap().snapped ? this.snap().point : (this.cursor() ?? p1);
-    const p2 = this.constrainOrthoPoint(p1, raw, this.store.altHeld());
+    const p2 = this.constrainOrthoPoint(p1, raw, this.altHeld());
     return {
       start: p1,
       end: p2,
@@ -878,7 +883,7 @@ export class Canvas {
       return null;
     }
     const raw = this.snap().snapped ? this.snap().point : (this.cursor() ?? p1);
-    const p2 = this.constrainOrthoPoint(p1, raw, this.store.altHeld());
+    const p2 = this.constrainOrthoPoint(p1, raw, this.altHeld());
     return dimensionView(p1, p2, this.handleSize() * 0.9, this.store.lengthUnit());
   });
 
@@ -913,22 +918,7 @@ export class Canvas {
     if (rect.width * this.zoom() < 4 && rect.depth * this.zoom() < 4) {
       return null;
     }
-    const pick = collectBoxSelection(this.store.plan(), drag.start, drag.current);
-    if (!drag.additive) {
-      return pick;
-    }
-    return {
-      objectIds: uniqueIds([
-        ...pick.objectIds,
-        ...this.store.selectedObjects().map((obj) => obj.id),
-      ]),
-      wallIds: uniqueIds([...pick.wallIds, ...this.store.selectedWalls().map((wall) => wall.id)]),
-      roomIds: uniqueIds([...pick.roomIds, ...this.store.selectedRooms().map((room) => room.id)]),
-      measurementIds: uniqueIds([
-        ...pick.measurementIds,
-        ...this.store.selectedMeasurements().map((item) => item.id),
-      ]),
-    };
+    return this.store.previewBox(drag.start, drag.current, drag.additive);
   });
 
   protected readonly highlightedObjects = computed(() => {
@@ -988,7 +978,7 @@ export class Canvas {
       return null;
     }
     const rect = normalizeRect(drag.start, drag.current);
-    const windowMode = boxSelectMode(drag.start, drag.current) === 'window';
+    const windowMode = drag.current.x >= drag.start.x;
     return {
       ...rect,
       fill: windowMode ? 'var(--window-select)' : 'var(--crossing-select)',
@@ -1009,13 +999,13 @@ export class Canvas {
   });
 
   protected readonly snapLabel = computed(() => {
-    if (this.drag().type === 'rotate-objects' && this.store.altHeld()) {
+    if (this.drag().type === 'rotate-objects' && this.altHeld()) {
       return '45° snap (Alt)';
     }
-    if (this.store.altHeld()) {
+    if (this.altHeld()) {
       return '90° snap (Alt)';
     }
-    if (this.store.tool() === 'select' && this.store.ctrlHeld()) {
+    if (this.store.tool() === 'select' && this.ctrlHeld()) {
       const snap = this.snap();
       if (snap.snapped && snap.kind === 'object-corner') {
         return 'Snap: object corner';
@@ -1025,7 +1015,7 @@ export class Canvas {
       }
       return 'Corner snap (Ctrl)';
     }
-    if (this.store.shiftHeld()) {
+    if (this.shiftHeld()) {
       return 'Snap off (Shift)';
     }
     const snap = this.snap();
@@ -1103,17 +1093,6 @@ export class Canvas {
     });
 
     effect(() => {
-      const token = this.store.fitToken();
-      const size = this.viewportSize();
-      if (token === 0 || token === this.lastFitToken || size.width < 20) {
-        return;
-      }
-      this.lastFitToken = token;
-      this.store.reportViewSize(size.width, size.height);
-      this.store.fitToView();
-    });
-
-    effect(() => {
       this.store.tool();
       this.wallStart.set(null);
       this.scaleP1.set(null);
@@ -1122,10 +1101,38 @@ export class Canvas {
   }
 
   cancelDraft(): void {
+    this.store.endEdit();
     this.drag.set({ type: 'none' });
     this.wallStart.set(null);
     this.scaleP1.set(null);
     this.measureP1.set(null);
+  }
+
+  protected onModifierDown(event: KeyboardEvent): void {
+    this.shiftHeld.set(event.shiftKey);
+    this.altHeld.set(event.altKey);
+    this.ctrlHeld.set(event.ctrlKey || event.metaKey);
+  }
+
+  protected onModifierUp(event: KeyboardEvent): void {
+    this.shiftHeld.set(event.shiftKey);
+    this.altHeld.set(event.altKey);
+    this.ctrlHeld.set(event.ctrlKey || event.metaKey);
+    if (event.key === 'Shift') {
+      this.shiftHeld.set(false);
+    }
+    if (event.key === 'Alt') {
+      this.altHeld.set(false);
+    }
+    if (event.key === 'Control' || event.key === 'Meta') {
+      this.ctrlHeld.set(false);
+    }
+  }
+
+  protected onModifierBlur(): void {
+    this.shiftHeld.set(false);
+    this.altHeld.set(false);
+    this.ctrlHeld.set(false);
   }
 
   protected onDragOver(event: DragEvent): void {
@@ -1188,7 +1195,7 @@ export class Canvas {
         const end = this.constrainOrthoPoint(
           p1,
           snapped.point,
-          event.altKey || this.store.altHeld(),
+          event.altKey || this.altHeld(),
         );
         this.store.openScaleDialog(p1, end);
         this.scaleP1.set(null);
@@ -1205,7 +1212,7 @@ export class Canvas {
         const end = this.constrainOrthoPoint(
           p1,
           snapped.point,
-          event.altKey || this.store.altHeld(),
+          event.altKey || this.altHeld(),
         );
         this.store.addMeasurement(p1, end);
         this.measureP1.set(null);
@@ -1237,15 +1244,27 @@ export class Canvas {
     }
 
     if (tool === 'select') {
-      const hit = hitTest(this.store.plan(), world, this.store.plan().viewport.zoom, this.store.selection());
+      const hit = hitTest(this.store.plan(), world, this.store.plan().viewport.zoom, {
+        objects: this.store.selectedObjects(),
+        wallId: this.store.selectedWall()?.id ?? null,
+        measurementId: this.store.selectedMeasurement()?.id ?? null,
+      });
       if (!hit) {
         this.drag.set({
           type: 'box-select',
           start: world,
           current: world,
-          additive: event.shiftKey || this.store.shiftHeld(),
+          additive: event.shiftKey || this.shiftHeld(),
         });
         return;
+      }
+      const additive = event.shiftKey || this.shiftHeld();
+      if (hit.type === 'object') {
+        if (additive || !this.store.isObjectSelected(hit.id)) {
+          this.store.selectFromHit(hit, additive);
+        }
+      } else if (hit.type !== 'rotate-object' && hit.type !== 'rotate-objects') {
+        this.store.selectFromHit(hit, additive);
       }
       if (hit.type === 'rotate-object' || hit.type === 'rotate-objects') {
         const targets = this.store.selectedObjects();
@@ -1274,12 +1293,10 @@ export class Canvas {
         return;
       }
       if (hit.type === 'wall-end') {
-        this.store.setSelection({ type: 'wall', id: hit.id });
         this.drag.set({ type: 'move-wall-end', id: hit.id, end: hit.end, recorded: false });
         return;
       }
       if (hit.type === 'measurement-end') {
-        this.store.setSelection({ type: 'measurement', id: hit.id });
         this.drag.set({
           type: 'move-measurement-end',
           id: hit.id,
@@ -1293,7 +1310,6 @@ export class Canvas {
         if (!measurement) {
           return;
         }
-        this.store.setSelection({ type: 'measurement', id: measurement.id });
         this.drag.set({
           type: 'move-measurement',
           id: measurement.id,
@@ -1305,14 +1321,6 @@ export class Canvas {
         return;
       }
       if (hit.type === 'object') {
-        const obj = this.store.plan().objects.find((item) => item.id === hit.id);
-        if (!obj) {
-          return;
-        }
-        const additive = event.shiftKey || this.store.shiftHeld();
-        if (additive || !this.store.isObjectSelected(obj.id)) {
-          this.store.selectObject(obj.id, additive);
-        }
         const targets = this.store.selectedObjects();
         if (targets.length === 0) {
           this.drag.set({ type: 'none' });
@@ -1331,7 +1339,6 @@ export class Canvas {
         if (!room) {
           return;
         }
-        this.store.setSelection({ type: 'room', id: room.id });
         this.drag.set({
           type: 'move-room',
           id: room.id,
@@ -1346,7 +1353,6 @@ export class Canvas {
       if (!wall) {
         return;
       }
-      this.store.setSelection({ type: 'wall', id: wall.id });
       this.drag.set({
         type: 'move-wall',
         id: wall.id,
@@ -1381,7 +1387,7 @@ export class Canvas {
 
     const moveThreshold = 3 / this.store.plan().viewport.zoom;
 
-    const alt = event.altKey || this.store.altHeld();
+    const alt = event.altKey || this.altHeld();
 
     if (drag.type === 'rotate-objects') {
       const rawDelta = angleDeg(drag.center, world) - drag.startAngle;
@@ -1395,7 +1401,7 @@ export class Canvas {
         return;
       }
       if (!drag.recorded) {
-        this.store.captureHistory();
+        this.store.beginEdit();
         this.drag.set({ ...drag, recorded: true });
       }
       this.store.applyObjectPoses(
@@ -1414,11 +1420,11 @@ export class Canvas {
         return;
       }
       if (!drag.recorded) {
-        this.store.captureHistory();
+        this.store.beginEdit();
         this.drag.set({ ...drag, recorded: true });
       }
       let { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
-      const ctrl = event.ctrlKey || this.store.ctrlHeld();
+      const ctrl = event.ctrlKey || this.ctrlHeld();
       if (ctrl) {
         const snappedMove = this.objectMoveSnap(drag.orig, dx, dy);
         if (snappedMove.snapped) {
@@ -1452,7 +1458,7 @@ export class Canvas {
         return;
       }
       if (!drag.recorded) {
-        this.store.captureHistory();
+        this.store.beginEdit();
         this.drag.set({ ...drag, recorded: true });
       }
       const { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
@@ -1467,7 +1473,7 @@ export class Canvas {
         return;
       }
       if (!drag.recorded) {
-        this.store.captureHistory();
+        this.store.beginEdit();
         this.drag.set({ ...drag, recorded: true });
       }
       const { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
@@ -1480,7 +1486,7 @@ export class Canvas {
 
     if (drag.type === 'move-wall-end') {
       if (!drag.recorded) {
-        this.store.captureHistory();
+        this.store.beginEdit();
         this.drag.set({ ...drag, recorded: true });
       }
       const wall = this.store.plan().walls.find((item) => item.id === drag.id);
@@ -1503,7 +1509,7 @@ export class Canvas {
         return;
       }
       if (!drag.recorded) {
-        this.store.captureHistory();
+        this.store.beginEdit();
         this.drag.set({ ...drag, recorded: true });
       }
       const { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
@@ -1516,7 +1522,7 @@ export class Canvas {
 
     if (drag.type === 'move-measurement-end') {
       if (!drag.recorded) {
-        this.store.captureHistory();
+        this.store.beginEdit();
         this.drag.set({ ...drag, recorded: true });
       }
       const origin =
@@ -1524,7 +1530,7 @@ export class Canvas {
           ? this.store.plan().measurements.find((item) => item.id === drag.id)?.end
           : this.store.plan().measurements.find((item) => item.id === drag.id)?.start;
       const point = origin
-        ? this.constrainOrthoPoint(origin, snapped.point, event.altKey || this.store.altHeld())
+        ? this.constrainOrthoPoint(origin, snapped.point, event.altKey || this.altHeld())
         : snapped.point;
       if (drag.end === 'start') {
         this.store.updateMeasurement(drag.id, { start: { ...point } });
@@ -1552,13 +1558,14 @@ export class Canvas {
       const size = Math.hypot(world.x - drag.start.x, world.y - drag.start.y);
       if (size < 4 / zoom) {
         if (!drag.additive) {
-          this.store.setSelection(null);
+          this.store.clearSelection();
         }
       } else {
-        this.store.selectBox(collectBoxSelection(this.store.plan(), drag.start, world), drag.additive);
+        this.store.selectBox(drag.start, world, drag.additive);
       }
     }
 
+    this.store.endEdit();
     this.drag.set({ type: 'none' });
   }
 
@@ -1612,7 +1619,7 @@ export class Canvas {
       tool === 'measure' ||
       drag.type === 'move-wall-end' ||
       drag.type === 'move-measurement-end';
-    const shift = event.shiftKey || this.store.shiftHeld();
+    const shift = event.shiftKey || this.shiftHeld();
     const zoom = this.store.plan().viewport.zoom;
     const ignoreWallId = drag.type === 'move-wall-end' ? drag.id : undefined;
     const enabled = wantsSnap && !shift;
@@ -1643,10 +1650,6 @@ export class Canvas {
     const rect = this.viewport().nativeElement.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
-}
-
-function uniqueIds(ids: string[]): string[] {
-  return [...new Set(ids)];
 }
 
 type DrawItem =

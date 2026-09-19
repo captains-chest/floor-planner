@@ -1,7 +1,6 @@
 import {
   FloorPlan,
   Point,
-  Selection,
   Wall,
   type PlacedObject,
   type Room,
@@ -344,7 +343,7 @@ function rotationHandlesFromCorners(corners: Point[], center: Point, zoom: numbe
   });
 }
 
-export function itemsBBox(objects: PlacedObject[]): BoundingBox | null {
+export function itemsBBox(objects: readonly PlacedObject[]): BoundingBox | null {
   if (objects.length === 0) {
     return null;
   }
@@ -366,28 +365,6 @@ export function itemsBBox(objects: PlacedObject[]): BoundingBox | null {
   return { x: minX, y: minY, width: Math.max(0.01, maxX - minX), depth: Math.max(0.01, maxY - minY) };
 }
 
-export function selectedPlacedObjects(plan: FloorPlan, selected: Selection): PlacedObject[] {
-  if (!selected) {
-    return [];
-  }
-  if (selected.type === 'object') {
-    const obj = plan.objects.find((item) => item.id === selected.id);
-    return obj ? [obj] : [];
-  }
-  if (selected.type === 'objects') {
-    const idSet = new Set(selected.ids);
-    return plan.objects.filter((item) => idSet.has(item.id));
-  }
-  if (selected.type === 'group') {
-    return plan.objects.filter((item) => item.groupId === selected.id);
-  }
-  if (selected.type === 'multi') {
-    const idSet = new Set(selected.objectIds);
-    return plan.objects.filter((item) => idSet.has(item.id));
-  }
-  return [];
-}
-
 export function rotatedObjectPose(
   obj: Pick<PlacedObject, 'x' | 'y' | 'width' | 'depth' | 'rotation'>,
   center: Point,
@@ -402,11 +379,20 @@ export function rotatedObjectPose(
   };
 }
 
-export function hitTest(plan: FloorPlan, p: Point, zoom: number, selected: Selection): Hit | null {
+export function hitTest(
+  plan: FloorPlan,
+  p: Point,
+  zoom: number,
+  handles: {
+    objects: readonly PlacedObject[];
+    wallId: string | null;
+    measurementId: string | null;
+  },
+): Hit | null {
   const handleR = 10 / zoom;
   const wallExtra = 8 / zoom;
 
-  const selectedObjects = selectedPlacedObjects(plan, selected);
+  const selectedObjects = handles.objects;
   if (selectedObjects.length > 1) {
     const box = itemsBBox(selectedObjects);
     if (box) {
@@ -424,8 +410,8 @@ export function hitTest(plan: FloorPlan, p: Point, zoom: number, selected: Selec
     }
   }
 
-  if (selected?.type === 'wall') {
-    const wall = plan.walls.find((item) => item.id === selected.id);
+  if (handles.wallId) {
+    const wall = plan.walls.find((item) => item.id === handles.wallId);
     if (wall) {
       if (dist(p, wall.start) <= handleR) {
         return { type: 'wall-end', id: wall.id, end: 'start' };
@@ -436,8 +422,8 @@ export function hitTest(plan: FloorPlan, p: Point, zoom: number, selected: Selec
     }
   }
 
-  if (selected?.type === 'measurement') {
-    const measurement = (plan.measurements ?? []).find((item) => item.id === selected.id);
+  if (handles.measurementId) {
+    const measurement = (plan.measurements ?? []).find((item) => item.id === handles.measurementId);
     if (measurement) {
       if (dist(p, measurement.start) <= handleR) {
         return { type: 'measurement-end', id: measurement.id, end: 'start' };
@@ -500,7 +486,7 @@ export function hitTest(plan: FloorPlan, p: Point, zoom: number, selected: Selec
   return null;
 }
 
-function objectContains(obj: PlacedObject, p: Point): boolean {
+export function objectContains(obj: PlacedObject, p: Point): boolean {
   const local = rotateAround(p, objectCenter(obj), -(obj.rotation ?? 0));
   if (obj.kind === 'rect') {
     return pointInRect(local, obj.x, obj.y, obj.width, obj.depth);
@@ -598,211 +584,4 @@ export function usedRoomCategories(rooms: Room[]): Room['category'][] {
     }
   }
   return result;
-}
-
-export type BoxSelectMode = 'window' | 'crossing';
-
-export interface BoxPick {
-  objectIds: string[];
-  wallIds: string[];
-  roomIds: string[];
-  measurementIds: string[];
-}
-
-export function boxSelectMode(start: Point, current: Point): BoxSelectMode {
-  return current.x >= start.x ? 'window' : 'crossing';
-}
-
-export function collectBoxSelection(plan: FloorPlan, start: Point, current: Point): BoxPick {
-  const box = normalizeRect(start, current);
-  const mode = boxSelectMode(start, current);
-  const empty: BoxPick = { objectIds: [], wallIds: [], roomIds: [], measurementIds: [] };
-  if (box.width < 1e-9 || box.depth < 1e-9) {
-    return empty;
-  }
-
-  const skip = new Set(
-    plan.layers.filter((layer) => !layer.visible || layer.locked).map((layer) => layer.id),
-  );
-  const windowMode = mode === 'window';
-
-  const objectIds: string[] = [];
-  const grouped = new Map<string, PlacedObject[]>();
-  const ungrouped: PlacedObject[] = [];
-  for (const obj of plan.objects) {
-    if (skip.has(obj.layerId)) {
-      continue;
-    }
-    if (obj.groupId) {
-      const list = grouped.get(obj.groupId) ?? [];
-      list.push(obj);
-      grouped.set(obj.groupId, list);
-    } else {
-      ungrouped.push(obj);
-    }
-  }
-  for (const obj of ungrouped) {
-    if (windowMode ? objectFullyInside(obj, box) : objectCrossesBox(obj, box)) {
-      objectIds.push(obj.id);
-    }
-  }
-  for (const members of grouped.values()) {
-    const hit = windowMode
-      ? members.every((member) => objectFullyInside(member, box))
-      : members.some((member) => objectCrossesBox(member, box));
-    if (hit) {
-      objectIds.push(...members.map((member) => member.id));
-    }
-  }
-
-  const wallIds: string[] = [];
-  for (const wall of plan.walls) {
-    if (skip.has(wall.layerId)) {
-      continue;
-    }
-    if (windowMode ? segmentFullyInside(wall.start, wall.end, box) : segmentCrossesBox(wall.start, wall.end, box)) {
-      wallIds.push(wall.id);
-    }
-  }
-
-  const roomIds: string[] = [];
-  for (const room of plan.rooms) {
-    if (skip.has(room.layerId)) {
-      continue;
-    }
-    if (windowMode ? aabbFullyInside(room, box) : aabbOverlaps(room, box)) {
-      roomIds.push(room.id);
-    }
-  }
-
-  const measurementIds: string[] = [];
-  for (const measurement of plan.measurements ?? []) {
-    if (windowMode
-      ? segmentFullyInside(measurement.start, measurement.end, box)
-      : segmentCrossesBox(measurement.start, measurement.end, box)) {
-      measurementIds.push(measurement.id);
-    }
-  }
-
-  return { objectIds, wallIds, roomIds, measurementIds };
-}
-
-function objectFullyInside(obj: PlacedObject, box: BoundingBox): boolean {
-  return objectCorners(obj).every((corner) => pointStrictlyInside(corner, box));
-}
-
-function objectCrossesBox(obj: PlacedObject, box: BoundingBox): boolean {
-  const corners = objectCorners(obj);
-  if (corners.some((corner) => pointInsideInclusive(corner, box))) {
-    return true;
-  }
-  for (let i = 0; i < corners.length; i += 1) {
-    if (segmentsIntersect(corners[i], corners[(i + 1) % corners.length], box)) {
-      return true;
-    }
-  }
-  const boxCorners: Point[] = [
-    { x: box.x, y: box.y },
-    { x: box.x + box.width, y: box.y },
-    { x: box.x + box.width, y: box.y + box.depth },
-    { x: box.x, y: box.y + box.depth },
-  ];
-  return boxCorners.every((corner) => objectContains(obj, corner));
-}
-
-function segmentFullyInside(a: Point, b: Point, box: BoundingBox): boolean {
-  return pointStrictlyInside(a, box) && pointStrictlyInside(b, box);
-}
-
-function segmentCrossesBox(a: Point, b: Point, box: BoundingBox): boolean {
-  if (pointInsideInclusive(a, box) || pointInsideInclusive(b, box)) {
-    return true;
-  }
-  return segmentsIntersect(a, b, box);
-}
-
-function aabbFullyInside(
-  rect: { x: number; y: number; width: number; depth: number },
-  box: BoundingBox,
-): boolean {
-  return (
-    rect.x > box.x &&
-    rect.y > box.y &&
-    rect.x + rect.width < box.x + box.width &&
-    rect.y + rect.depth < box.y + box.depth
-  );
-}
-
-function aabbOverlaps(
-  rect: { x: number; y: number; width: number; depth: number },
-  box: BoundingBox,
-): boolean {
-  return (
-    rect.x <= box.x + box.width &&
-    box.x <= rect.x + rect.width &&
-    rect.y <= box.y + box.depth &&
-    box.y <= rect.y + rect.depth
-  );
-}
-
-function pointStrictlyInside(p: Point, box: BoundingBox): boolean {
-  const eps = 1e-9;
-  return (
-    p.x > box.x + eps &&
-    p.y > box.y + eps &&
-    p.x < box.x + box.width - eps &&
-    p.y < box.y + box.depth - eps
-  );
-}
-
-function pointInsideInclusive(p: Point, box: BoundingBox): boolean {
-  return p.x >= box.x && p.y >= box.y && p.x <= box.x + box.width && p.y <= box.y + box.depth;
-}
-
-function segmentsIntersect(a: Point, b: Point, box: BoundingBox): boolean {
-  const edges: [Point, Point][] = [
-    [{ x: box.x, y: box.y }, { x: box.x + box.width, y: box.y }],
-    [{ x: box.x + box.width, y: box.y }, { x: box.x + box.width, y: box.y + box.depth }],
-    [{ x: box.x + box.width, y: box.y + box.depth }, { x: box.x, y: box.y + box.depth }],
-    [{ x: box.x, y: box.y + box.depth }, { x: box.x, y: box.y }],
-  ];
-  return edges.some(([c, d]) => segmentsCross(a, b, c, d));
-}
-
-function segmentsCross(p1: Point, p2: Point, q1: Point, q2: Point): boolean {
-  const o1 = orient(p1, p2, q1);
-  const o2 = orient(p1, p2, q2);
-  const o3 = orient(q1, q2, p1);
-  const o4 = orient(q1, q2, p2);
-  if (o1 * o2 < 0 && o3 * o4 < 0) {
-    return true;
-  }
-  const eps = 1e-12;
-  if (Math.abs(o1) <= eps && onSegment(p1, p2, q1)) {
-    return true;
-  }
-  if (Math.abs(o2) <= eps && onSegment(p1, p2, q2)) {
-    return true;
-  }
-  if (Math.abs(o3) <= eps && onSegment(q1, q2, p1)) {
-    return true;
-  }
-  if (Math.abs(o4) <= eps && onSegment(q1, q2, p2)) {
-    return true;
-  }
-  return false;
-}
-
-function orient(a: Point, b: Point, c: Point): number {
-  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-}
-
-function onSegment(a: Point, b: Point, p: Point): boolean {
-  const eps = 1e-9;
-  return (
-    p.x >= Math.min(a.x, b.x) - eps &&
-    p.x <= Math.max(a.x, b.x) + eps &&
-    p.y >= Math.min(a.y, b.y) - eps &&
-    p.y <= Math.max(a.y, b.y) + eps
-  );
 }
