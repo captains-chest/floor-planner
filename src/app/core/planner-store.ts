@@ -1,17 +1,13 @@
 import { computed, effect, inject, Service, signal } from '@angular/core';
 import {
   FloorPlan,
-  Layer,
   Measurement,
   PlacedObject,
   Point,
-  Room,
-  RoomCategory,
   Selection,
   ShapeKind,
   Tool,
   Viewport,
-  Wall,
 } from '../models/floor-plan';
 import { type Hit } from './geometry';
 import { measureImage, readFileAsDataUrl } from './image';
@@ -34,10 +30,6 @@ import {
   selectedMeasurements as measurementsOf,
   selectedObject as objectOf,
   selectedPlacedObjects,
-  selectedRoom as roomOf,
-  selectedRooms as roomsOf,
-  selectedWall as wallOf,
-  selectedWalls as wallsOf,
   selectFromHit as applySelectFromHit,
   selectionCount as countSelection,
 } from './selection';
@@ -91,19 +83,10 @@ export class PlannerStore {
     };
   });
 
-  readonly activeLayer = computed(() => {
-    const plan = this.#plan();
-    return plan.layers.find((layer) => layer.id === plan.activeLayerId) ?? plan.layers[0];
-  });
-
-  readonly selectedWall = computed(() => wallOf(this.#plan(), this.#selection()));
   readonly selectedObject = computed(() => objectOf(this.#plan(), this.#selection()));
-  readonly selectedRoom = computed(() => roomOf(this.#plan(), this.#selection()));
   readonly selectedMeasurement = computed(() => measurementOf(this.#plan(), this.#selection()));
   readonly selectedObjects = computed(() => selectedPlacedObjects(this.#plan(), this.#selection()));
   readonly selectedGroup = computed(() => groupOf(this.#plan(), this.#selection()));
-  readonly selectedWalls = computed(() => wallsOf(this.#plan(), this.#selection()));
-  readonly selectedRooms = computed(() => roomsOf(this.#plan(), this.#selection()));
   readonly selectedMeasurements = computed(() => measurementsOf(this.#plan(), this.#selection()));
   readonly selectionCount = computed(() => countSelection(this.#plan(), this.#selection()));
 
@@ -148,15 +131,6 @@ export class PlannerStore {
   setTool(tool: Tool): void {
     this.#tool.set(tool);
     this.#status.set(toolHint(tool));
-    const layerName = defaultLayerName(tool);
-    if (!layerName) {
-      return;
-    }
-    const layer = this.#plan().layers.find((item) => item.name === layerName);
-    if (layer && layer.visible && !layer.locked && this.#plan().activeLayerId !== layer.id) {
-      this.#edit.setActiveLayer(layer.id);
-      this.#sync();
-    }
   }
 
   setSpaceHeld(value: boolean): void {
@@ -292,62 +266,12 @@ export class PlannerStore {
     return true;
   }
 
-  setActiveLayer(id: string): void {
-    this.#edit.setActiveLayer(id);
-    this.#sync();
-  }
-
-  addLayer(): void {
-    this.#apply(this.#edit.addLayer());
-  }
-
-  renameLayer(id: string, name: string): void {
-    this.#apply(this.#edit.renameLayer(id, name));
-  }
-
-  patchLayer(id: string, patch: Partial<Pick<Layer, 'visible' | 'locked'>>): void {
-    this.#edit.patchLayer(id, patch);
-    this.#sync();
-  }
-
-  moveLayer(id: string, direction: -1 | 1): void {
-    this.#edit.moveLayer(id, direction);
-    this.#sync();
-  }
-
-  removeLayer(id: string): void {
-    this.#edit.removeLayer(id);
-    this.#sync();
-  }
-
-  addWall(start: Point, end: Point): Wall | null {
-    const result = this.#edit.addWall(start, end);
-    this.#sync();
-    if ('wall' in result) {
-      return result.wall;
-    }
-    this.#applyNotice(result.notice);
-    return null;
-  }
-
-  updateWall(
-    id: string,
-    patch: Partial<Pick<Wall, 'start' | 'end' | 'thickness' | 'layerId'>>,
-  ): void {
-    this.#edit.updateWall(id, patch);
-    this.#sync();
-  }
-
-  addObject(kind: ShapeKind, x: number, y: number, width: number, depth: number): PlacedObject | null {
+  addObject(kind: ShapeKind, x: number, y: number, width: number, depth: number): PlacedObject {
     const result = this.#edit.addObject(kind, x, y, width, depth);
     this.#sync();
-    if ('object' in result) {
-      this.#selection.set({ type: 'object', id: result.object.id });
-      this.setTool('select');
-      return result.object;
-    }
-    this.#applyNotice(result.notice);
-    return null;
+    this.#selection.set({ type: 'object', id: result.object.id });
+    this.setTool('select');
+    return result.object;
   }
 
   updateObject(id: string, patch: Partial<PlacedObject>): void {
@@ -398,17 +322,6 @@ export class PlannerStore {
     this.#sync();
   }
 
-  addRoom(x: number, y: number, width: number, depth: number, category: RoomCategory = 'other'): Room | null {
-    const result = this.#edit.addRoom(x, y, width, depth, category);
-    this.#sync();
-    if ('room' in result) {
-      this.#selection.set({ type: 'room', id: result.room.id });
-      return result.room;
-    }
-    this.#applyNotice(result.notice);
-    return null;
-  }
-
   addMeasurement(start: Point, end: Point): Measurement | null {
     const result = this.#edit.addMeasurement(start, end);
     this.#sync();
@@ -423,11 +336,6 @@ export class PlannerStore {
 
   updateMeasurement(id: string, patch: Partial<Pick<Measurement, 'start' | 'end'>>): void {
     this.#edit.updateMeasurement(id, patch);
-    this.#sync();
-  }
-
-  updateRoom(id: string, patch: Partial<Room>): void {
-    this.#edit.updateRoom(id, patch);
     this.#sync();
   }
 
@@ -516,12 +424,6 @@ const noticeText = (notice: PlanNotice): string => {
       return 'Already at the back';
     case 'restacked':
       return stackStatus(notice.direction, notice.count);
-    case 'layer-locked':
-      return `Layer “${notice.name}” is locked.`;
-    case 'layer-hidden':
-      return `Layer “${notice.name}” is hidden.`;
-    case 'no-layer':
-      return 'Create a layer first.';
     case 'image-imported':
       return 'Image imported. Use Scale and mark a known length.';
     case 'scale-applied':
@@ -562,21 +464,6 @@ const fileSlug = (name: string): string => {
   return slug || 'floor-plan';
 };
 
-const defaultLayerName = (tool: Tool): string | null => {
-  switch (tool) {
-    case 'wall':
-      return 'Walls';
-    case 'room':
-      return 'Rooms';
-    case 'rect':
-    case 'circle':
-    case 'ellipse':
-      return 'Furniture';
-    default:
-      return null;
-  }
-};
-
 const toolHint = (tool: Tool): string => {
   switch (tool) {
     case 'select':
@@ -586,17 +473,13 @@ const toolHint = (tool: Tool): string => {
     case 'scale':
       return 'Click two points on a known length · hold Alt to snap to 90°';
     case 'measure':
-      return 'Click two points to measure · snaps to walls and object corners · Alt: 90°';
-    case 'wall':
-      return 'Click to place wall corners · Shift disables snap · Esc ends the chain';
+      return 'Click two points to measure · snaps to object corners · Alt: 90°';
     case 'rect':
       return 'Click and drag to place a rectangle';
     case 'circle':
       return 'Click and drag to place a circle';
     case 'ellipse':
       return 'Click and drag to place an ellipse';
-    case 'room':
-      return 'Click and drag to mark a room, then set its category';
     default: {
       const _never: never = tool;
       return _never;

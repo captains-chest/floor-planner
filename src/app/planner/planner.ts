@@ -4,13 +4,12 @@ import { PlannerStore } from '../core/planner-store';
 import { Tool } from '../models/floor-plan';
 import { Canvas } from './canvas/canvas';
 import { Inspector } from './inspector/inspector';
-import { LayerPanel } from './layer-panel/layer-panel';
 import { Toolbar } from './toolbar/toolbar';
 import { Toolbox } from './toolbox/toolbox';
 
 @Component({
   selector: 'app-planner',
-  imports: [Toolbar, Toolbox, Canvas, LayerPanel, Inspector],
+  imports: [Toolbar, Toolbox, Canvas, Inspector],
   host: {
     '(document:keydown)': 'onKeyDown($event)',
     '(document:keyup)': 'onKeyUp($event)',
@@ -20,7 +19,7 @@ import { Toolbox } from './toolbox/toolbox';
     :host {
       display: grid;
       grid-template-rows: auto 1fr auto;
-      grid-template-columns: auto minmax(0, 1fr) 240px max-content;
+      grid-template-columns: auto minmax(0, 1fr) max-content;
       height: 100%;
       background: var(--bg);
       color: var(--text);
@@ -33,7 +32,6 @@ import { Toolbox } from './toolbox/toolbox';
 
     app-toolbox,
     app-canvas,
-    app-layer-panel,
     app-inspector {
       min-height: 0;
     }
@@ -142,12 +140,11 @@ import { Toolbox } from './toolbox/toolbox';
       <app-toolbar />
       <app-toolbox />
       <app-canvas />
-      <app-layer-panel />
       <app-inspector />
       <div class="status">
         <span>{{ store.status() }}</span>
         <span
-          >Units: {{ store.lengthUnit() }} · Shift: no wall snap · Alt: 90° · Ctrl: corner snap ·
+          >Units: {{ store.lengthUnit() }} · Shift: no snap · Alt: 90° · Ctrl: corner snap ·
           Space: pan</span
         >
       </div>
@@ -353,16 +350,12 @@ function shortcutTool(key: string): Tool | null {
       return 'scale';
     case 'm':
       return 'measure';
-    case 'w':
-      return 'wall';
     case 'r':
       return 'rect';
     case 'c':
       return 'circle';
     case 'e':
       return 'ellipse';
-    case 'g':
-      return 'room';
     default:
       return null;
   }

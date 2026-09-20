@@ -4,9 +4,7 @@ import {
   ObjectGroup,
   PlacedObject,
   Point,
-  Room,
   Selection,
-  Wall,
 } from '../models/floor-plan';
 import {
   type BoundingBox,
@@ -20,15 +18,11 @@ export type BoxSelectMode = 'window' | 'crossing';
 
 export interface BoxPick {
   objectIds: string[];
-  wallIds: string[];
-  roomIds: string[];
   measurementIds: string[];
 }
 
 export const emptyPick = (): BoxPick => ({
   objectIds: [],
-  wallIds: [],
-  roomIds: [],
   measurementIds: [],
 });
 
@@ -57,30 +51,6 @@ export const selectedPlacedObjects = (plan: FloorPlan, selected: Selection): Pla
   return [];
 };
 
-export const selectedWalls = (plan: FloorPlan, selected: Selection): Wall[] => {
-  if (selected?.type === 'wall') {
-    const wall = plan.walls.find((item) => item.id === selected.id);
-    return wall ? [wall] : [];
-  }
-  if (selected?.type === 'multi') {
-    const ids = new Set(selected.wallIds);
-    return plan.walls.filter((wall) => ids.has(wall.id));
-  }
-  return [];
-};
-
-export const selectedRooms = (plan: FloorPlan, selected: Selection): Room[] => {
-  if (selected?.type === 'room') {
-    const room = plan.rooms.find((item) => item.id === selected.id);
-    return room ? [room] : [];
-  }
-  if (selected?.type === 'multi') {
-    const ids = new Set(selected.roomIds);
-    return plan.rooms.filter((room) => ids.has(room.id));
-  }
-  return [];
-};
-
 export const selectedMeasurements = (plan: FloorPlan, selected: Selection): Measurement[] => {
   if (selected?.type === 'measurement') {
     const item = (plan.measurements ?? []).find((entry) => entry.id === selected.id);
@@ -100,9 +70,6 @@ export const selectedGroup = (plan: FloorPlan, selected: Selection): ObjectGroup
   return (plan.groups ?? []).find((group) => group.id === selected.id) ?? null;
 };
 
-export const selectedWall = (plan: FloorPlan, selected: Selection): Wall | null =>
-  selectedWalls(plan, selected)[0] ?? null;
-
 export const selectedObject = (plan: FloorPlan, selected: Selection): PlacedObject | null => {
   if (selected?.type !== 'object') {
     return null;
@@ -110,16 +77,11 @@ export const selectedObject = (plan: FloorPlan, selected: Selection): PlacedObje
   return plan.objects.find((obj) => obj.id === selected.id) ?? null;
 };
 
-export const selectedRoom = (plan: FloorPlan, selected: Selection): Room | null =>
-  selectedRooms(plan, selected)[0] ?? null;
-
 export const selectedMeasurement = (plan: FloorPlan, selected: Selection): Measurement | null =>
   selectedMeasurements(plan, selected)[0] ?? null;
 
 export const selectionCount = (plan: FloorPlan, selected: Selection): number =>
   selectedPlacedObjects(plan, selected).length +
-  selectedWalls(plan, selected).length +
-  selectedRooms(plan, selected).length +
   selectedMeasurements(plan, selected).length;
 
 export const isObjectSelected = (plan: FloorPlan, selected: Selection, id: string): boolean =>
@@ -133,18 +95,12 @@ export const collectBoxSelection = (plan: FloorPlan, start: Point, current: Poin
     return empty;
   }
 
-  const skip = new Set(
-    plan.layers.filter((layer) => !layer.visible || layer.locked).map((layer) => layer.id),
-  );
   const windowMode = mode === 'window';
 
   const objectIds: string[] = [];
   const grouped = new Map<string, PlacedObject[]>();
   const ungrouped: PlacedObject[] = [];
   for (const obj of plan.objects) {
-    if (skip.has(obj.layerId)) {
-      continue;
-    }
     if (obj.groupId) {
       const list = grouped.get(obj.groupId) ?? [];
       list.push(obj);
@@ -167,30 +123,6 @@ export const collectBoxSelection = (plan: FloorPlan, start: Point, current: Poin
     }
   }
 
-  const wallIds: string[] = [];
-  for (const wall of plan.walls) {
-    if (skip.has(wall.layerId)) {
-      continue;
-    }
-    if (
-      windowMode
-        ? segmentFullyInside(wall.start, wall.end, box)
-        : segmentCrossesBox(wall.start, wall.end, box)
-    ) {
-      wallIds.push(wall.id);
-    }
-  }
-
-  const roomIds: string[] = [];
-  for (const room of plan.rooms) {
-    if (skip.has(room.layerId)) {
-      continue;
-    }
-    if (windowMode ? aabbFullyInside(room, box) : aabbOverlaps(room, box)) {
-      roomIds.push(room.id);
-    }
-  }
-
   const measurementIds: string[] = [];
   for (const measurement of plan.measurements ?? []) {
     if (
@@ -202,7 +134,7 @@ export const collectBoxSelection = (plan: FloorPlan, start: Point, current: Poin
     }
   }
 
-  return { objectIds, wallIds, roomIds, measurementIds };
+  return { objectIds, measurementIds };
 };
 
 export const pickFromSelection = (plan: FloorPlan, selection: Selection): BoxPick => {
@@ -222,48 +154,29 @@ export const pickFromSelection = (plan: FloorPlan, selection: Selection): BoxPic
       objectIds: plan.objects.filter((obj) => obj.groupId === selection.id).map((obj) => obj.id),
     };
   }
-  if (selection.type === 'wall') {
-    return { ...empty, wallIds: [selection.id] };
-  }
-  if (selection.type === 'room') {
-    return { ...empty, roomIds: [selection.id] };
-  }
   if (selection.type === 'measurement') {
     return { ...empty, measurementIds: [selection.id] };
   }
   return {
     objectIds: [...selection.objectIds],
-    wallIds: [...selection.wallIds],
-    roomIds: [...selection.roomIds],
     measurementIds: [...selection.measurementIds],
   };
 };
 
 export const mergePicks = (a: BoxPick, b: BoxPick): BoxPick => ({
   objectIds: uniqueIds([...a.objectIds, ...b.objectIds]),
-  wallIds: uniqueIds([...a.wallIds, ...b.wallIds]),
-  roomIds: uniqueIds([...a.roomIds, ...b.roomIds]),
   measurementIds: uniqueIds([...a.measurementIds, ...b.measurementIds]),
 });
 
 export const collapsePick = (plan: FloorPlan, pick: BoxPick): Selection => {
   const objects = pick.objectIds.length;
-  const walls = pick.wallIds.length;
-  const rooms = pick.roomIds.length;
   const measurements = pick.measurementIds.length;
-  const kinds =
-    (objects > 0 ? 1 : 0) + (walls > 0 ? 1 : 0) + (rooms > 0 ? 1 : 0) + (measurements > 0 ? 1 : 0);
+  const kinds = (objects > 0 ? 1 : 0) + (measurements > 0 ? 1 : 0);
   if (kinds === 0) {
     return null;
   }
   if (kinds === 1 && objects > 0) {
     return selectionFromObjectIds(plan, pick.objectIds);
-  }
-  if (kinds === 1 && walls === 1) {
-    return { type: 'wall', id: pick.wallIds[0] };
-  }
-  if (kinds === 1 && rooms === 1) {
-    return { type: 'room', id: pick.roomIds[0] };
   }
   if (kinds === 1 && measurements === 1) {
     return { type: 'measurement', id: pick.measurementIds[0] };
@@ -271,8 +184,6 @@ export const collapsePick = (plan: FloorPlan, pick: BoxPick): Selection => {
   return {
     type: 'multi',
     objectIds: pick.objectIds,
-    wallIds: pick.wallIds,
-    roomIds: pick.roomIds,
     measurementIds: pick.measurementIds,
   };
 };
@@ -345,12 +256,6 @@ export const selectFromHit = (
   if (hit.type === 'object') {
     return selectObject(plan, current, hit.id, additive);
   }
-  if (hit.type === 'wall' || hit.type === 'wall-end') {
-    return { type: 'wall', id: hit.id };
-  }
-  if (hit.type === 'room') {
-    return { type: 'room', id: hit.id };
-  }
   return { type: 'measurement', id: hit.id };
 };
 
@@ -408,24 +313,6 @@ const segmentCrossesBox = (a: Point, b: Point, box: BoundingBox): boolean => {
   }
   return segmentsIntersect(a, b, box);
 };
-
-const aabbFullyInside = (
-  rect: { x: number; y: number; width: number; depth: number },
-  box: BoundingBox,
-): boolean =>
-  rect.x > box.x &&
-  rect.y > box.y &&
-  rect.x + rect.width < box.x + box.width &&
-  rect.y + rect.depth < box.y + box.depth;
-
-const aabbOverlaps = (
-  rect: { x: number; y: number; width: number; depth: number },
-  box: BoundingBox,
-): boolean =>
-  rect.x <= box.x + box.width &&
-  box.x <= rect.x + rect.width &&
-  rect.y <= box.y + box.depth &&
-  box.y <= rect.y + rect.depth;
 
 const pointStrictlyInside = (p: Point, box: BoundingBox): boolean => {
   const eps = 1e-9;

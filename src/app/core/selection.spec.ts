@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   createDefaultPlan,
   FloorPlan,
+  Measurement,
   PlacedObject,
-  Wall,
 } from '../models/floor-plan';
 import {
   collectBoxSelection,
@@ -14,10 +14,9 @@ import {
 } from './selection';
 
 const objectAt = (
-  plan: FloorPlan,
+  _plan: FloorPlan,
   patch: Partial<PlacedObject> & Pick<PlacedObject, 'id' | 'x' | 'y'>,
 ): PlacedObject => ({
-  layerId: plan.activeLayerId,
   kind: 'rect',
   name: patch.id,
   width: 1,
@@ -27,12 +26,16 @@ const objectAt = (
   ...patch,
 });
 
-const wallAt = (plan: FloorPlan, id: string, x1: number, y1: number, x2: number, y2: number): Wall => ({
+const measurementAt = (
+  id: string,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): Measurement => ({
   id,
-  layerId: plan.activeLayerId,
   start: { x: x1, y: y1 },
   end: { x: x2, y: y2 },
-  thickness: 0.1,
 });
 
 const withObjects = (
@@ -86,10 +89,10 @@ describe('selectFromHit', () => {
     expect(selectedPlacedObjects(grouped, removed).map((obj) => obj.id)).toEqual(['c']);
   });
 
-  it('selects a wall from a wall-end hit', () => {
+  it('selects a measurement from a measurement hit', () => {
     const plan = createDefaultPlan();
-    const next = selectFromHit(plan, null, { type: 'wall-end', id: 'w1', end: 'start' }, false);
-    expect(next).toEqual({ type: 'wall', id: 'w1' });
+    const next = selectFromHit(plan, null, { type: 'measurement', id: 'm1' }, false);
+    expect(next).toEqual({ type: 'measurement', id: 'm1' });
   });
 });
 
@@ -137,31 +140,11 @@ describe('selectBox', () => {
     const mixed: FloorPlan = {
       ...plan,
       objects: [objectAt(plan, { id: 'o1', x: 0, y: 0 })],
-      walls: [wallAt(plan, 'w1', 0, 2, 1, 2)],
+      measurements: [measurementAt('m1', 0, 2, 1, 2)],
     };
     const pick = collectBoxSelection(mixed, { x: -0.5, y: -0.5 }, { x: 2, y: 3 });
     const selection = selectBox(mixed, null, pick, false);
     expect(selection?.type).toBe('multi');
     expect(selectionCount(mixed, selection)).toBe(2);
-  });
-
-  it('skips locked and hidden layers', () => {
-    const plan = createDefaultPlan();
-    const locked = plan.layers[0];
-    const visible = plan.layers[1];
-    const filled: FloorPlan = {
-      ...plan,
-      layers: [
-        { ...locked, locked: true },
-        { ...visible, visible: true },
-        ...plan.layers.slice(2),
-      ],
-      objects: [
-        objectAt(plan, { id: 'hidden', x: 0, y: 0, layerId: locked.id }),
-        objectAt(plan, { id: 'shown', x: 0, y: 0, layerId: visible.id }),
-      ],
-    };
-    const pick = collectBoxSelection(filled, { x: -0.5, y: -0.5 }, { x: 2, y: 2 });
-    expect(pick.objectIds).toEqual(['shown']);
   });
 });

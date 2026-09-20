@@ -2,21 +2,16 @@ import {
   createDefaultPlan,
   createId,
   DEFAULT_IMAGE_WIDTH_METERS,
-  DEFAULT_WALL_THICKNESS,
   FloorPlan,
-  Layer,
   MAX_ZOOM,
   Measurement,
   MIN_ZOOM,
   ObjectGroup,
   PlacedObject,
   Point,
-  Room,
-  RoomCategory,
   Selection,
   ShapeKind,
   Viewport,
-  Wall,
 } from '../models/floor-plan';
 import { clamp, contentBBox, dist, scalePoint } from './geometry';
 import { selectionFromObjectIds, selectedPlacedObjects } from './selection';
@@ -42,9 +37,6 @@ export type PlanNotice =
   | { kind: 'already-front' }
   | { kind: 'already-back' }
   | { kind: 'restacked'; direction: StackDirection; count: number }
-  | { kind: 'layer-locked'; name: string }
-  | { kind: 'layer-hidden'; name: string }
-  | { kind: 'no-layer' }
   | { kind: 'image-imported' }
   | { kind: 'scale-applied' }
   | { kind: 'project-imported' };
@@ -207,129 +199,16 @@ export class PlanEdit {
     this.#plan = { ...this.#plan, name };
   }
 
-  setActiveLayer(id: string): void {
-    this.#plan = { ...this.#plan, activeLayerId: id };
-  }
-
-  addLayer(): PlanEditResult {
-    this.#record();
-    const layer: Layer = {
-      id: createId('layer'),
-      name: `Layer ${this.#plan.layers.length + 1}`,
-      visible: true,
-      locked: false,
-    };
-    this.#plan = {
-      ...this.#plan,
-      layers: [...this.#plan.layers, layer],
-      activeLayerId: layer.id,
-    };
-    return { notice: null };
-  }
-
-  renameLayer(id: string, name: string): PlanEditResult {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      return { notice: null };
-    }
-    this.#record();
-    this.#plan = {
-      ...this.#plan,
-      layers: this.#plan.layers.map((layer) => (layer.id === id ? { ...layer, name: trimmed } : layer)),
-    };
-    return { notice: null };
-  }
-
-  patchLayer(id: string, patch: Partial<Pick<Layer, 'visible' | 'locked'>>): void {
-    this.#record();
-    this.#plan = {
-      ...this.#plan,
-      layers: this.#plan.layers.map((layer) => (layer.id === id ? { ...layer, ...patch } : layer)),
-    };
-  }
-
-  moveLayer(id: string, direction: -1 | 1): void {
-    this.#record();
-    const index = this.#plan.layers.findIndex((layer) => layer.id === id);
-    const next = index + direction;
-    if (index < 0 || next < 0 || next >= this.#plan.layers.length) {
-      return;
-    }
-    const layers = [...this.#plan.layers];
-    const [item] = layers.splice(index, 1);
-    layers.splice(next, 0, item);
-    this.#plan = { ...this.#plan, layers };
-  }
-
-  removeLayer(id: string): void {
-    if (this.#plan.layers.length <= 1) {
-      return;
-    }
-    const remaining = this.#plan.layers.filter((layer) => layer.id !== id);
-    const fallbackId = remaining[0].id;
-    this.#record();
-    this.#plan = {
-      ...this.#plan,
-      layers: remaining,
-      activeLayerId: this.#plan.activeLayerId === id ? fallbackId : this.#plan.activeLayerId,
-      walls: this.#plan.walls.map((wall) =>
-        wall.layerId === id ? { ...wall, layerId: fallbackId } : wall,
-      ),
-      objects: this.#plan.objects.map((obj) =>
-        obj.layerId === id ? { ...obj, layerId: fallbackId } : obj,
-      ),
-      rooms: this.#plan.rooms.map((room) =>
-        room.layerId === id ? { ...room, layerId: fallbackId } : room,
-      ),
-    };
-  }
-
-  addWall(start: Point, end: Point): { wall: Wall } | PlanEditResult {
-    if (dist(start, end) < 0.02) {
-      return { notice: null };
-    }
-    const layer = this.#requireUnlockedActiveLayer();
-    if ('notice' in layer) {
-      return layer;
-    }
-    const wall: Wall = {
-      id: createId('wall'),
-      layerId: layer.id,
-      start: { ...start },
-      end: { ...end },
-      thickness: DEFAULT_WALL_THICKNESS,
-    };
-    this.#record();
-    this.#plan = { ...this.#plan, walls: [...this.#plan.walls, wall] };
-    return { wall };
-  }
-
-  updateWall(
-    id: string,
-    patch: Partial<Pick<Wall, 'start' | 'end' | 'thickness' | 'layerId'>>,
-  ): void {
-    this.#record();
-    this.#plan = {
-      ...this.#plan,
-      walls: this.#plan.walls.map((wall) => (wall.id === id ? { ...wall, ...patch } : wall)),
-    };
-  }
-
   addObject(
     kind: ShapeKind,
     x: number,
     y: number,
     width: number,
     depth: number,
-  ): { object: PlacedObject } | PlanEditResult {
-    const layer = this.#requireUnlockedActiveLayer();
-    if ('notice' in layer) {
-      return layer;
-    }
+  ): { object: PlacedObject } {
     const size = sanitizeSize(kind, width, depth);
     const obj: PlacedObject = {
       id: createId('obj'),
-      layerId: layer.id,
       kind,
       name: defaultObjectName(kind, this.#plan),
       x,
@@ -438,13 +317,9 @@ export class PlanEdit {
     if (!clipboard || clipboard.objects.length === 0) {
       return { notice: { kind: 'nothing-to-paste' } };
     }
-    const layer = this.#requireUnlockedActiveLayer();
-    if ('notice' in layer) {
-      return layer;
-    }
     this.#pasteGeneration += 1;
     const offset = PASTE_OFFSET_METERS * this.#pasteGeneration;
-    const duplicated = duplicateClipboard(clipboard, { x: offset, y: offset }, layer.id);
+    const duplicated = duplicateClipboard(clipboard, { x: offset, y: offset });
     this.#record();
     this.#plan = {
       ...this.#plan,
@@ -521,32 +396,6 @@ export class PlanEdit {
     };
   }
 
-  addRoom(
-    x: number,
-    y: number,
-    width: number,
-    depth: number,
-    category: RoomCategory = 'other',
-  ): { room: Room } | PlanEditResult {
-    const layer = this.#requireUnlockedActiveLayer();
-    if ('notice' in layer) {
-      return layer;
-    }
-    const room: Room = {
-      id: createId('room'),
-      layerId: layer.id,
-      name: defaultRoomName(category, this.#plan),
-      category,
-      x,
-      y,
-      width: Math.max(0.2, width),
-      depth: Math.max(0.2, depth),
-    };
-    this.#record();
-    this.#plan = { ...this.#plan, rooms: [...this.#plan.rooms, room] };
-    return { room };
-  }
-
   addMeasurement(start: Point, end: Point): { measurement: Measurement } | PlanEditResult {
     if (dist(start, end) < 0.01) {
       return { notice: null };
@@ -571,28 +420,6 @@ export class PlanEdit {
       measurements: this.#plan.measurements.map((item) =>
         item.id === id ? { ...item, ...patch } : item,
       ),
-    };
-  }
-
-  updateRoom(id: string, patch: Partial<Room>): void {
-    this.#record();
-    this.#plan = {
-      ...this.#plan,
-      rooms: this.#plan.rooms.map((room) => {
-        if (room.id !== id) {
-          return room;
-        }
-        const next = { ...room, ...patch };
-        next.width = Math.max(0.01, next.width);
-        next.depth = Math.max(0.01, next.depth);
-        if (patch.category && !patch.name) {
-          const previousLabel = categoryLabel(room.category);
-          if (room.name === previousLabel || room.name.startsWith(`${previousLabel} `)) {
-            next.name = categoryLabel(patch.category);
-          }
-        }
-        return next;
-      }),
     };
   }
 
@@ -621,25 +448,12 @@ export class PlanEdit {
             calibrated: true,
           }
         : this.#plan.background,
-      walls: this.#plan.walls.map((wall) => ({
-        ...wall,
-        start: scalePoint(wall.start, factor),
-        end: scalePoint(wall.end, factor),
-        thickness: wall.thickness * factor,
-      })),
       objects: this.#plan.objects.map((obj) => ({
         ...obj,
         x: obj.x * factor,
         y: obj.y * factor,
         width: obj.width * factor,
         depth: obj.depth * factor,
-      })),
-      rooms: this.#plan.rooms.map((room) => ({
-        ...room,
-        x: room.x * factor,
-        y: room.y * factor,
-        width: room.width * factor,
-        depth: room.depth * factor,
       })),
       measurements: (this.#plan.measurements ?? []).map((item) => ({
         ...item,
@@ -680,21 +494,6 @@ export class PlanEdit {
     return { notice: { kind: 'project-imported' }, selection: null, fit: true };
   }
 
-  #requireUnlockedActiveLayer(): Layer | PlanEditResult {
-    const layer =
-      this.#plan.layers.find((item) => item.id === this.#plan.activeLayerId) ?? this.#plan.layers[0];
-    if (!layer) {
-      return { notice: { kind: 'no-layer' } };
-    }
-    if (layer.locked) {
-      return { notice: { kind: 'layer-locked', name: layer.name } };
-    }
-    if (!layer.visible) {
-      return { notice: { kind: 'layer-hidden', name: layer.name } };
-    }
-    return layer;
-  }
-
   #record(): void {
     if (this.#gesturing) {
       return;
@@ -729,44 +528,17 @@ const restackObjects = (
   direction: StackDirection,
 ): PlacedObject[] => {
   const selected = new Set(selectedIds);
-  if (selected.size === 0) {
+  const moving = objects.filter((item) => selected.has(item.id));
+  if (moving.length === 0 || moving.length === objects.length) {
     return [...objects];
   }
-  const layerIds = new Set(objects.filter((obj) => selected.has(obj.id)).map((obj) => obj.layerId));
-  const next = [...objects];
-  for (const layerId of layerIds) {
-    const indices: number[] = [];
-    const items: PlacedObject[] = [];
-    for (let i = 0; i < next.length; i += 1) {
-      if (next[i].layerId === layerId) {
-        indices.push(i);
-        items.push(next[i]);
-      }
-    }
-    const restacked = restackLayerItems(items, selected, direction);
-    for (let i = 0; i < indices.length; i += 1) {
-      next[indices[i]] = restacked[i];
-    }
-  }
-  return next;
-};
-
-const restackLayerItems = (
-  items: PlacedObject[],
-  selected: Set<string>,
-  direction: StackDirection,
-): PlacedObject[] => {
-  const moving = items.filter((item) => selected.has(item.id));
-  if (moving.length === 0 || moving.length === items.length) {
-    return items;
-  }
   if (direction === 'front') {
-    return [...items.filter((item) => !selected.has(item.id)), ...moving];
+    return [...objects.filter((item) => !selected.has(item.id)), ...moving];
   }
   if (direction === 'back') {
-    return [...moving, ...items.filter((item) => !selected.has(item.id))];
+    return [...moving, ...objects.filter((item) => !selected.has(item.id))];
   }
-  const result = [...items];
+  const result = [...objects];
   if (direction === 'forward') {
     for (let i = result.length - 2; i >= 0; i -= 1) {
       if (selected.has(result[i].id) && !selected.has(result[i + 1].id)) {
@@ -793,7 +565,6 @@ const sameObjectOrder = (a: readonly PlacedObject[], b: readonly PlacedObject[])
 const duplicateClipboard = (
   clipboard: ObjectClipboard,
   offset: Point,
-  layerId: string,
 ): { objects: PlacedObject[]; groups: ObjectGroup[] } => {
   const groupIdMap = new Map<string, string>();
   for (const obj of clipboard.objects) {
@@ -817,7 +588,6 @@ const duplicateClipboard = (
   const objects = clipboard.objects.map((obj) => ({
     ...obj,
     id: createId('obj'),
-    layerId,
     x: obj.x + offset.x,
     y: obj.y + offset.y,
     groupId: obj.groupId ? (groupIdMap.get(obj.groupId) ?? null) : null,
@@ -828,9 +598,6 @@ const duplicateClipboard = (
 const removeSelection = (plan: FloorPlan, selection: Selection): FloorPlan => {
   if (!selection) {
     return plan;
-  }
-  if (selection.type === 'wall') {
-    return { ...plan, walls: plan.walls.filter((wall) => wall.id !== selection.id) };
   }
   if (selection.type === 'object') {
     return removeObjects(plan, new Set([selection.id]));
@@ -854,15 +621,13 @@ const removeSelection = (plan: FloorPlan, selection: Selection): FloorPlan => {
     let next = removeObjects(plan, new Set(selection.objectIds));
     next = {
       ...next,
-      walls: next.walls.filter((wall) => !selection.wallIds.includes(wall.id)),
-      rooms: next.rooms.filter((room) => !selection.roomIds.includes(room.id)),
       measurements: (next.measurements ?? []).filter(
         (item) => !selection.measurementIds.includes(item.id),
       ),
     };
     return next;
   }
-  return { ...plan, rooms: plan.rooms.filter((room) => room.id !== selection.id) };
+  return plan;
 };
 
 const removeObjects = (plan: FloorPlan, ids: Set<string>): FloorPlan => {
@@ -897,39 +662,4 @@ const defaultObjectName = (kind: ShapeKind, plan: FloorPlan): string => {
   const count = plan.objects.filter((obj) => obj.kind === kind).length + 1;
   const label = kind === 'rect' ? 'Rect' : kind === 'circle' ? 'Circle' : 'Ellipse';
   return `${label} ${count}`;
-};
-
-const defaultRoomName = (category: RoomCategory, plan: FloorPlan): string => {
-  const label = categoryLabel(category);
-  const count = plan.rooms.filter((room) => room.category === category).length + 1;
-  return count === 1 ? label : `${label} ${count}`;
-};
-
-const categoryLabel = (category: RoomCategory): string => {
-  switch (category) {
-    case 'living':
-      return 'Living';
-    case 'bedroom':
-      return 'Bedroom';
-    case 'kitchen':
-      return 'Kitchen';
-    case 'bathroom':
-      return 'Bathroom';
-    case 'hallway':
-      return 'Hallway';
-    case 'office':
-      return 'Office';
-    case 'dining':
-      return 'Dining';
-    case 'storage':
-      return 'Storage';
-    case 'outdoor':
-      return 'Outdoor';
-    case 'other':
-      return 'Room';
-    default: {
-      const _never: never = category;
-      return _never;
-    }
-  }
 };
