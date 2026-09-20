@@ -14,7 +14,6 @@ import {
   OBJECT_COLORS,
   PlacedObject,
   Point,
-  ROOM_CATEGORY_MAP,
   SNAP_PIXELS,
   ShapeKind,
 } from '../../models/floor-plan';
@@ -35,8 +34,6 @@ import {
   snapObjectMove,
   snapToGeometry,
   snapToRightAngle,
-  snapToWalls,
-  usedRoomCategories,
 } from '../../core/geometry';
 import { PlannerStore } from '../../core/planner-store';
 import { formatLength, metersToDisplay } from '../../core/units';
@@ -50,23 +47,6 @@ type DragState =
       start: Point;
       recorded: boolean;
     }
-  | {
-      type: 'move-room';
-      id: string;
-      origX: number;
-      origY: number;
-      start: Point;
-      recorded: boolean;
-    }
-  | {
-      type: 'move-wall';
-      id: string;
-      origStart: Point;
-      origEnd: Point;
-      start: Point;
-      recorded: boolean;
-    }
-  | { type: 'move-wall-end'; id: string; end: 'start' | 'end'; recorded: boolean }
   | {
       type: 'move-measurement';
       id: string;
@@ -84,7 +64,6 @@ type DragState =
       recorded: boolean;
     }
   | { type: 'draw-shape'; kind: ShapeKind; start: Point }
-  | { type: 'draw-room'; start: Point }
   | { type: 'box-select'; start: Point; current: Point; additive: boolean };
 
 @Component({
@@ -135,13 +114,6 @@ type DragState =
       border-radius: 999px;
       padding: 4px 10px;
       backdrop-filter: blur(8px);
-    }
-
-    .legend-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
     }
 
     .empty {
@@ -243,119 +215,62 @@ type DragState =
           />
         }
 
-        @for (item of drawList(); track item.key) {
-          @switch (item.kind) {
-            @case ('room') {
-              <g>
-                <rect
-                  [attr.x]="item.room.x"
-                  [attr.y]="item.room.y"
-                  [attr.width]="item.room.width"
-                  [attr.height]="item.room.depth"
-                  [attr.fill]="item.fill"
-                  fill-opacity="0.28"
-                  [attr.stroke]="item.stroke"
-                  stroke-width="1.5"
-                  vector-effect="non-scaling-stroke"
-                />
-                @if (item.room.width * zoom() > 48 && item.room.depth * zoom() > 22) {
-                  <text
-                    [attr.x]="item.room.x + item.room.width / 2"
-                    [attr.y]="item.room.y + item.room.depth / 2"
-                    text-anchor="middle"
-                    dominant-baseline="middle"
-                    fill="var(--text)"
-                    [attr.font-size]="labelSize()"
-                    font-weight="600"
-                  >
-                    {{ item.room.name }}
-                  </text>
-                }
-              </g>
-            }
-            @case ('wall') {
-              <line
-                [attr.x1]="item.wall.start.x"
-                [attr.y1]="item.wall.start.y"
-                [attr.x2]="item.wall.end.x"
-                [attr.y2]="item.wall.end.y"
-                stroke="var(--wall)"
-                [attr.stroke-width]="item.wall.thickness"
-                stroke-linecap="square"
+        @for (item of drawList(); track item.obj.id) {
+          <g [attr.transform]="rotateTransform(item.obj)">
+            @if (item.obj.kind === 'rect') {
+              <rect
+                [attr.x]="item.obj.x"
+                [attr.y]="item.obj.y"
+                [attr.width]="item.obj.width"
+                [attr.height]="item.obj.depth"
+                [attr.fill]="item.fill"
+                fill-opacity="0.82"
+                stroke="#0d1117"
+                stroke-opacity="0.35"
+                stroke-width="1"
+                vector-effect="non-scaling-stroke"
+              />
+            } @else {
+              <ellipse
+                [attr.cx]="item.obj.x + item.obj.width / 2"
+                [attr.cy]="item.obj.y + item.obj.depth / 2"
+                [attr.rx]="item.obj.width / 2"
+                [attr.ry]="item.obj.depth / 2"
+                [attr.fill]="item.fill"
+                fill-opacity="0.82"
+                stroke="#0d1117"
+                stroke-opacity="0.35"
+                stroke-width="1"
+                vector-effect="non-scaling-stroke"
               />
             }
-            @case ('object') {
-              <g [attr.transform]="rotateTransform(item.obj)">
-                @if (item.obj.kind === 'rect') {
-                  <rect
-                    [attr.x]="item.obj.x"
-                    [attr.y]="item.obj.y"
-                    [attr.width]="item.obj.width"
-                    [attr.height]="item.obj.depth"
-                    [attr.fill]="item.fill"
-                    fill-opacity="0.82"
-                    stroke="#0d1117"
-                    stroke-opacity="0.35"
-                    stroke-width="1"
-                    vector-effect="non-scaling-stroke"
-                  />
-                } @else {
-                  <ellipse
-                    [attr.cx]="item.obj.x + item.obj.width / 2"
-                    [attr.cy]="item.obj.y + item.obj.depth / 2"
-                    [attr.rx]="item.obj.width / 2"
-                    [attr.ry]="item.obj.depth / 2"
-                    [attr.fill]="item.fill"
-                    fill-opacity="0.82"
-                    stroke="#0d1117"
-                    stroke-opacity="0.35"
-                    stroke-width="1"
-                    vector-effect="non-scaling-stroke"
-                  />
-                }
-                @if (item.obj.name && item.obj.width * zoom() > 28 && item.obj.depth * zoom() > 16) {
-                  @if (item.obj.kind === 'rect') {
-                    <text
-                      [attr.x]="item.obj.x + labelSize() * 0.35"
-                      [attr.y]="item.obj.y + item.obj.depth - labelSize() * 0.28"
-                      text-anchor="start"
-                      fill="#1a1d23"
-                      [attr.font-size]="labelSize()"
-                      font-weight="600"
-                    >
-                      {{ item.obj.name }}
-                    </text>
-                  } @else {
-                    <text
-                      [attr.x]="item.obj.x + item.obj.width / 2"
-                      [attr.y]="item.obj.y + item.obj.depth / 2"
-                      text-anchor="middle"
-                      dominant-baseline="middle"
-                      fill="#1a1d23"
-                      [attr.font-size]="labelSize()"
-                      font-weight="600"
-                    >
-                      {{ item.obj.name }}
-                    </text>
-                  }
-                }
-              </g>
+            @if (item.obj.name && item.obj.width * zoom() > 28 && item.obj.depth * zoom() > 16) {
+              @if (item.obj.kind === 'rect') {
+                <text
+                  [attr.x]="item.obj.x + labelSize() * 0.35"
+                  [attr.y]="item.obj.y + item.obj.depth - labelSize() * 0.28"
+                  text-anchor="start"
+                  fill="#1a1d23"
+                  [attr.font-size]="labelSize()"
+                  font-weight="600"
+                >
+                  {{ item.obj.name }}
+                </text>
+              } @else {
+                <text
+                  [attr.x]="item.obj.x + item.obj.width / 2"
+                  [attr.y]="item.obj.y + item.obj.depth / 2"
+                  text-anchor="middle"
+                  dominant-baseline="middle"
+                  fill="#1a1d23"
+                  [attr.font-size]="labelSize()"
+                  font-weight="600"
+                >
+                  {{ item.obj.name }}
+                </text>
+              }
             }
-          }
-        }
-
-        @for (room of highlightedRooms(); track room.id) {
-          <rect
-            [attr.x]="room.x"
-            [attr.y]="room.y"
-            [attr.width]="room.width"
-            [attr.height]="room.depth"
-            fill="none"
-            stroke="var(--accent)"
-            stroke-width="2"
-            stroke-dasharray="6 4"
-            vector-effect="non-scaling-stroke"
-          />
+          </g>
         }
 
         @for (obj of highlightedObjects(); track obj.id) {
@@ -409,64 +324,8 @@ type DragState =
           />
         }
 
-        @for (wall of highlightedWalls(); track wall.id) {
-          <line
-            [attr.x1]="wall.start.x"
-            [attr.y1]="wall.start.y"
-            [attr.x2]="wall.end.x"
-            [attr.y2]="wall.end.y"
-            stroke="var(--accent)"
-            [attr.stroke-width]="wall.thickness + handleSize() * 0.4"
-            stroke-linecap="square"
-            stroke-opacity="0.45"
-          />
-          <rect
-            [attr.x]="wall.start.x - handleSize() / 2"
-            [attr.y]="wall.start.y - handleSize() / 2"
-            [attr.width]="handleSize()"
-            [attr.height]="handleSize()"
-            fill="var(--accent)"
-            stroke="#0d1117"
-            stroke-width="1"
-            vector-effect="non-scaling-stroke"
-          />
-          <rect
-            [attr.x]="wall.end.x - handleSize() / 2"
-            [attr.y]="wall.end.y - handleSize() / 2"
-            [attr.width]="handleSize()"
-            [attr.height]="handleSize()"
-            fill="var(--accent)"
-            stroke="#0d1117"
-            stroke-width="1"
-            vector-effect="non-scaling-stroke"
-          />
-        }
-
-        @if (wallPreview(); as preview) {
-          <line
-            [attr.x1]="preview.start.x"
-            [attr.y1]="preview.start.y"
-            [attr.x2]="preview.end.x"
-            [attr.y2]="preview.end.y"
-            stroke="var(--accent)"
-            [attr.stroke-width]="0.1"
-            stroke-dasharray="0.12 0.08"
-            stroke-linecap="square"
-          />
-          <text
-            [attr.x]="preview.mid.x"
-            [attr.y]="preview.mid.y - labelSize()"
-            text-anchor="middle"
-            fill="var(--accent)"
-            [attr.font-size]="labelSize()"
-            font-weight="600"
-          >
-            {{ preview.length }}
-          </text>
-        }
-
         @if (shapePreview(); as preview) {
-          @if (preview.kind === 'rect' || preview.kind === 'room') {
+          @if (preview.kind === 'rect') {
             <rect
               [attr.x]="preview.x"
               [attr.y]="preview.y"
@@ -668,7 +527,7 @@ type DragState =
         <div>
           <h2>Import a floor plan image</h2>
           <p>
-            Drop an image onto the canvas, then use Scale and mark a known wall length so
+            Drop an image onto the canvas, then use Scale and mark a known length so
             everything is in real-world units.
           </p>
         </div>
@@ -679,12 +538,6 @@ type DragState =
       <div class="hud-group">
         <span class="chip">{{ cursorLabel() }}</span>
         <span class="chip">{{ snapLabel() }}</span>
-        @for (category of legend(); track category.id) {
-          <span class="chip">
-            <span class="legend-dot" [style.background]="category.color"></span>
-            {{ category.label }}
-          </span>
-        }
       </div>
       <div class="hud-group">
         <span class="chip">{{ zoomLabel() }}</span>
@@ -701,7 +554,6 @@ export class Canvas {
 
   private readonly viewportSize = signal({ width: 800, height: 600 });
   private readonly drag = signal<DragState>({ type: 'none' });
-  protected readonly wallStart = signal<Point | null>(null);
   protected readonly scaleP1 = signal<Point | null>(null);
   protected readonly measureP1 = signal<Point | null>(null);
   protected readonly cursor = signal<Point | null>(null);
@@ -720,9 +572,6 @@ export class Canvas {
   protected readonly handleSize = computed(() => 8 / this.zoom());
   protected readonly imageWidth = computed(() => this.store.imageSizeMeters()?.width ?? 0);
   protected readonly imageHeight = computed(() => this.store.imageSizeMeters()?.height ?? 0);
-  protected readonly selectedWall = this.store.selectedWall;
-  protected readonly selectedObject = this.store.selectedObject;
-  protected readonly selectedRoom = this.store.selectedRoom;
   protected readonly selectedMeasurement = this.store.selectedMeasurement;
 
   protected readonly viewBox = computed(() => {
@@ -748,62 +597,16 @@ export class Canvas {
     };
   });
 
-  protected readonly drawList = computed(() => {
-    const plan = this.store.plan();
-    const items: DrawItem[] = [];
-    for (const layer of plan.layers) {
-      if (!layer.visible) {
-        continue;
-      }
-      for (const room of plan.rooms) {
-        if (room.layerId !== layer.id) {
-          continue;
-        }
-        const info = ROOM_CATEGORY_MAP.get(room.category);
-        items.push({
-          key: `room-${room.id}`,
-          kind: 'room',
-          room,
-          fill: info?.color ?? '#7d8799',
-          stroke: info?.color ?? '#7d8799',
-        });
-      }
-      for (const wall of plan.walls) {
-        if (wall.layerId !== layer.id) {
-          continue;
-        }
-        items.push({ key: `wall-${wall.id}`, kind: 'wall', wall });
-      }
-      for (const obj of plan.objects) {
-        if (obj.layerId !== layer.id) {
-          continue;
-        }
-        items.push({
-          key: `obj-${obj.id}`,
-          kind: 'object',
-          obj,
-          fill: OBJECT_COLORS[obj.kind],
-        });
-      }
-    }
-    return items;
-  });
+  protected readonly drawList = computed(() =>
+    this.store.plan().objects.map((obj) => ({
+      obj,
+      fill: OBJECT_COLORS[obj.kind],
+    })),
+  );
 
   protected readonly isEmpty = computed(() => {
     const plan = this.store.plan();
-    return (
-      !this.store.imageDataUrl() &&
-      plan.walls.length === 0 &&
-      plan.objects.length === 0 &&
-      plan.rooms.length === 0
-    );
-  });
-
-  protected readonly legend = computed(() => {
-    const ids = usedRoomCategories(this.store.plan().rooms);
-    return ids
-      .map((id) => ROOM_CATEGORY_MAP.get(id))
-      .filter((item): item is NonNullable<typeof item> => item != null);
+    return !this.store.imageDataUrl() && plan.objects.length === 0;
   });
 
   protected readonly cssCursor = computed(() => {
@@ -823,23 +626,6 @@ export class Canvas {
     return 'crosshair';
   });
 
-  protected readonly wallPreview = computed(() => {
-    const start = this.wallStart();
-    const end = this.snap().point;
-    if (!start || this.store.tool() !== 'wall') {
-      return null;
-    }
-    if (this.drag().type === 'pan') {
-      return null;
-    }
-    return {
-      start,
-      end,
-      mid: midpoint(start, end),
-      length: formatLength(dist(start, end), this.store.lengthUnit()),
-    };
-  });
-
   protected readonly shapePreview = computed(() => {
     const drag = this.drag();
     const current = this.cursor() ?? this.snap().point;
@@ -848,14 +634,6 @@ export class Canvas {
       return {
         ...rect,
         kind: drag.kind,
-        label: `${formatLength(rect.width, this.store.lengthUnit())} × ${formatLength(rect.depth, this.store.lengthUnit())}`,
-      };
-    }
-    if (drag.type === 'draw-room') {
-      const rect = normalizeRect(drag.start, current);
-      return {
-        ...rect,
-        kind: 'room' as const,
         label: `${formatLength(rect.width, this.store.lengthUnit())} × ${formatLength(rect.depth, this.store.lengthUnit())}`,
       };
     }
@@ -930,24 +708,6 @@ export class Canvas {
     return this.store.plan().objects.filter((obj) => ids.has(obj.id));
   });
 
-  protected readonly highlightedWalls = computed(() => {
-    const hover = this.hoverPick();
-    if (!hover) {
-      return this.store.selectedWalls();
-    }
-    const ids = new Set(hover.wallIds);
-    return this.store.plan().walls.filter((wall) => ids.has(wall.id));
-  });
-
-  protected readonly highlightedRooms = computed(() => {
-    const hover = this.hoverPick();
-    if (!hover) {
-      return this.store.selectedRooms();
-    }
-    const ids = new Set(hover.roomIds);
-    return this.store.plan().rooms.filter((room) => ids.has(room.id));
-  });
-
   protected readonly highlightedMeasurements = computed(() => {
     const hover = this.hoverPick();
     if (!hover) {
@@ -1010,9 +770,6 @@ export class Canvas {
       if (snap.snapped && snap.kind === 'object-corner') {
         return 'Snap: object corner';
       }
-      if (snap.snapped && (snap.kind === 'edge' || snap.kind === 'endpoint')) {
-        return 'Snap: wall';
-      }
       return 'Corner snap (Ctrl)';
     }
     if (this.shiftHeld()) {
@@ -1021,12 +778,6 @@ export class Canvas {
     const snap = this.snap();
     if (snap.snapped && snap.kind === 'object-corner') {
       return 'Snap: object corner';
-    }
-    if (snap.snapped && snap.kind === 'endpoint') {
-      return 'Snap: endpoint';
-    }
-    if (snap.snapped && snap.kind === 'edge') {
-      return 'Snap: edge';
     }
     return 'Snap on';
   });
@@ -1094,7 +845,6 @@ export class Canvas {
 
     effect(() => {
       this.store.tool();
-      this.wallStart.set(null);
       this.scaleP1.set(null);
       this.measureP1.set(null);
     });
@@ -1103,7 +853,6 @@ export class Canvas {
   cancelDraft(): void {
     this.store.endEdit();
     this.drag.set({ type: 'none' });
-    this.wallStart.set(null);
     this.scaleP1.set(null);
     this.measureP1.set(null);
   }
@@ -1220,33 +969,14 @@ export class Canvas {
       return;
     }
 
-    if (tool === 'wall') {
-      const start = this.wallStart();
-      if (!start) {
-        this.wallStart.set({ ...snapped.point });
-      } else {
-        const wall = this.store.addWall(start, snapped.point);
-        if (wall) {
-          this.wallStart.set({ ...snapped.point });
-        }
-      }
-      return;
-    }
-
     if (tool === 'rect' || tool === 'circle' || tool === 'ellipse') {
       this.drag.set({ type: 'draw-shape', kind: tool, start: world });
-      return;
-    }
-
-    if (tool === 'room') {
-      this.drag.set({ type: 'draw-room', start: world });
       return;
     }
 
     if (tool === 'select') {
       const hit = hitTest(this.store.plan(), world, this.store.plan().viewport.zoom, {
         objects: this.store.selectedObjects(),
-        wallId: this.store.selectedWall()?.id ?? null,
         measurementId: this.store.selectedMeasurement()?.id ?? null,
       });
       if (!hit) {
@@ -1292,10 +1022,6 @@ export class Canvas {
         });
         return;
       }
-      if (hit.type === 'wall-end') {
-        this.drag.set({ type: 'move-wall-end', id: hit.id, end: hit.end, recorded: false });
-        return;
-      }
       if (hit.type === 'measurement-end') {
         this.drag.set({
           type: 'move-measurement-end',
@@ -1334,33 +1060,6 @@ export class Canvas {
         });
         return;
       }
-      if (hit.type === 'room') {
-        const room = this.store.plan().rooms.find((item) => item.id === hit.id);
-        if (!room) {
-          return;
-        }
-        this.drag.set({
-          type: 'move-room',
-          id: room.id,
-          origX: room.x,
-          origY: room.y,
-          start: world,
-          recorded: false,
-        });
-        return;
-      }
-      const wall = this.store.plan().walls.find((item) => item.id === hit.id);
-      if (!wall) {
-        return;
-      }
-      this.drag.set({
-        type: 'move-wall',
-        id: wall.id,
-        origStart: { ...wall.start },
-        origEnd: { ...wall.end },
-        start: world,
-        recorded: false,
-      });
     }
   }
 
@@ -1451,57 +1150,6 @@ export class Canvas {
       return;
     }
 
-    if (drag.type === 'move-room') {
-      const rawDx = world.x - drag.start.x;
-      const rawDy = world.y - drag.start.y;
-      if (!drag.recorded && Math.hypot(rawDx, rawDy) < moveThreshold) {
-        return;
-      }
-      if (!drag.recorded) {
-        this.store.beginEdit();
-        this.drag.set({ ...drag, recorded: true });
-      }
-      const { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
-      this.store.updateRoom(drag.id, { x: drag.origX + dx, y: drag.origY + dy });
-      return;
-    }
-
-    if (drag.type === 'move-wall') {
-      const rawDx = world.x - drag.start.x;
-      const rawDy = world.y - drag.start.y;
-      if (!drag.recorded && Math.hypot(rawDx, rawDy) < moveThreshold) {
-        return;
-      }
-      if (!drag.recorded) {
-        this.store.beginEdit();
-        this.drag.set({ ...drag, recorded: true });
-      }
-      const { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
-      this.store.updateWall(drag.id, {
-        start: { x: drag.origStart.x + dx, y: drag.origStart.y + dy },
-        end: { x: drag.origEnd.x + dx, y: drag.origEnd.y + dy },
-      });
-      return;
-    }
-
-    if (drag.type === 'move-wall-end') {
-      if (!drag.recorded) {
-        this.store.beginEdit();
-        this.drag.set({ ...drag, recorded: true });
-      }
-      const wall = this.store.plan().walls.find((item) => item.id === drag.id);
-      const origin = drag.end === 'start' ? wall?.end : wall?.start;
-      const point = origin
-        ? this.constrainOrthoPoint(origin, snapped.point, alt)
-        : snapped.point;
-      if (drag.end === 'start') {
-        this.store.updateWall(drag.id, { start: { ...point } });
-      } else {
-        this.store.updateWall(drag.id, { end: { ...point } });
-      }
-      return;
-    }
-
     if (drag.type === 'move-measurement') {
       const rawDx = world.x - drag.start.x;
       const rawDy = world.y - drag.start.y;
@@ -1547,12 +1195,6 @@ export class Canvas {
     if (drag.type === 'draw-shape') {
       const rect = previewShape(drag.kind, drag.start, world);
       this.store.addObject(drag.kind, rect.x, rect.y, rect.width, rect.depth);
-    } else if (drag.type === 'draw-room') {
-      const rect = normalizeRect(drag.start, world);
-      const width = Math.max(rect.width, 0.4);
-      const depth = Math.max(rect.depth, 0.4);
-      this.store.addRoom(rect.x, rect.y, width, depth);
-      this.store.setTool('select');
     } else if (drag.type === 'box-select') {
       const zoom = this.store.plan().viewport.zoom;
       const size = Math.hypot(world.x - drag.start.x, world.y - drag.start.y);
@@ -1582,17 +1224,15 @@ export class Canvas {
     dy: number,
   ) {
     const plan = this.store.plan();
-    const hidden = new Set(plan.layers.filter((layer) => !layer.visible).map((layer) => layer.id));
     const movingIds = new Set(orig.map((item) => item.id));
     const byId = new Map(plan.objects.map((obj) => [obj.id, obj]));
     const moving = orig.flatMap((item) => {
       const live = byId.get(item.id);
       return live ? [{ ...live, x: item.x + dx, y: item.y + dy }] : [];
     });
-    const others = plan.objects.filter((obj) => !movingIds.has(obj.id) && !hidden.has(obj.layerId));
-    const walls = plan.walls.filter((wall) => !hidden.has(wall.layerId));
+    const others = plan.objects.filter((obj) => !movingIds.has(obj.id));
     const zoom = plan.viewport.zoom;
-    return snapObjectMove(moving, walls, others, SNAP_PIXELS / zoom);
+    return snapObjectMove(moving, others, SNAP_PIXELS / zoom);
   }
 
   private constrainOrthoPoint(origin: Point, point: Point, altHeld: boolean): Point {
@@ -1614,27 +1254,14 @@ export class Canvas {
     const tool = this.store.tool();
     const drag = this.drag();
     const wantsSnap =
-      tool === 'wall' ||
       tool === 'scale' ||
       tool === 'measure' ||
-      drag.type === 'move-wall-end' ||
       drag.type === 'move-measurement-end';
     const shift = event.shiftKey || this.shiftHeld();
     const zoom = this.store.plan().viewport.zoom;
-    const ignoreWallId = drag.type === 'move-wall-end' ? drag.id : undefined;
     const enabled = wantsSnap && !shift;
     const plan = this.store.plan();
-    if (tool === 'measure' || drag.type === 'move-measurement-end') {
-      const hidden = new Set(plan.layers.filter((layer) => !layer.visible).map((layer) => layer.id));
-      return snapToGeometry(
-        world,
-        plan.walls.filter((wall) => !hidden.has(wall.layerId)),
-        plan.objects.filter((obj) => !hidden.has(obj.layerId)),
-        SNAP_PIXELS / zoom,
-        enabled,
-      );
-    }
-    return snapToWalls(world, plan.walls, SNAP_PIXELS / zoom, enabled, ignoreWallId);
+    return snapToGeometry(world, plan.objects, SNAP_PIXELS / zoom, enabled);
   }
 
   private clientToWorld(event: { clientX: number; clientY: number }): Point {
@@ -1651,11 +1278,6 @@ export class Canvas {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 }
-
-type DrawItem =
-  | { key: string; kind: 'room'; room: import('../../models/floor-plan').Room; fill: string; stroke: string }
-  | { key: string; kind: 'wall'; wall: import('../../models/floor-plan').Wall }
-  | { key: string; kind: 'object'; obj: import('../../models/floor-plan').PlacedObject; fill: string };
 
 function pickGridStep(zoom: number): number {
   const targetMeters = 48 / zoom;

@@ -2,13 +2,9 @@ import { Service } from '@angular/core';
 import {
   createDefaultPlan,
   FloorPlan,
-  Layer,
   Measurement,
   ObjectGroup,
   PlacedObject,
-  Room,
-  RoomCategory,
-  Wall,
 } from '../models/floor-plan';
 import { isLengthUnit, type LengthUnit } from './units';
 
@@ -134,29 +130,13 @@ function normalizePlan(raw: unknown): FloorPlan {
     return fallback;
   }
   const value = raw as Partial<FloorPlan>;
-  const layers = Array.isArray(value.layers)
-    ? value.layers.map(normalizeLayer).filter((layer): layer is Layer => layer !== null)
-    : fallback.layers;
-  const safeLayers = layers.length > 0 ? layers : fallback.layers;
-  const activeLayerId =
-    typeof value.activeLayerId === 'string' && safeLayers.some((layer) => layer.id === value.activeLayerId)
-      ? value.activeLayerId
-      : safeLayers[0].id;
 
   return {
     version: 1,
     name: typeof value.name === 'string' && value.name.trim() ? value.name : fallback.name,
     background: normalizeBackground(value.background),
-    layers: safeLayers,
-    activeLayerId,
-    walls: Array.isArray(value.walls)
-      ? value.walls.map(normalizeWall).filter((wall): wall is Wall => wall !== null)
-      : [],
     objects: Array.isArray(value.objects)
       ? value.objects.map(normalizeObject).filter((obj): obj is PlacedObject => obj !== null)
-      : [],
-    rooms: Array.isArray(value.rooms)
-      ? value.rooms.map(normalizeRoom).filter((room): room is Room => room !== null)
       : [],
     measurements: Array.isArray(value.measurements)
       ? value.measurements
@@ -203,22 +183,6 @@ function normalizeGroup(raw: unknown): ObjectGroup | null {
   return { id: value.id, name: value.name };
 }
 
-function normalizeLayer(raw: unknown): Layer | null {
-  if (!raw || typeof raw !== 'object') {
-    return null;
-  }
-  const value = raw as Partial<Layer>;
-  if (typeof value.id !== 'string' || typeof value.name !== 'string') {
-    return null;
-  }
-  return {
-    id: value.id,
-    name: value.name,
-    visible: value.visible !== false,
-    locked: Boolean(value.locked),
-  };
-}
-
 function normalizeMeasurement(raw: unknown): Measurement | null {
   if (!raw || typeof raw !== 'object') {
     return null;
@@ -235,40 +199,17 @@ function normalizeMeasurement(raw: unknown): Measurement | null {
   return { id: value.id, start, end };
 }
 
-function normalizeWall(raw: unknown): Wall | null {
-  if (!raw || typeof raw !== 'object') {
-    return null;
-  }
-  const value = raw as Partial<Wall>;
-  if (typeof value.id !== 'string' || typeof value.layerId !== 'string') {
-    return null;
-  }
-  const start = normalizePoint(value.start);
-  const end = normalizePoint(value.end);
-  if (!start || !end) {
-    return null;
-  }
-  return {
-    id: value.id,
-    layerId: value.layerId,
-    start,
-    end,
-    thickness: Math.max(0.01, num(value.thickness, 0.1)),
-  };
-}
-
 function normalizeObject(raw: unknown): PlacedObject | null {
   if (!raw || typeof raw !== 'object') {
     return null;
   }
   const value = raw as Partial<PlacedObject>;
-  if (typeof value.id !== 'string' || typeof value.layerId !== 'string') {
+  if (typeof value.id !== 'string') {
     return null;
   }
   const kind = value.kind === 'circle' || value.kind === 'ellipse' || value.kind === 'rect' ? value.kind : 'rect';
   return {
     id: value.id,
-    layerId: value.layerId,
     kind,
     name: typeof value.name === 'string' ? value.name : 'Object',
     x: num(value.x, 0),
@@ -277,42 +218,6 @@ function normalizeObject(raw: unknown): PlacedObject | null {
     depth: Math.max(0.01, num(value.depth, 0.8)),
     rotation: num(value.rotation, 0),
     groupId: typeof value.groupId === 'string' ? value.groupId : null,
-  };
-}
-
-const ROOM_CATEGORY_IDS: readonly RoomCategory[] = [
-  'living',
-  'bedroom',
-  'kitchen',
-  'bathroom',
-  'hallway',
-  'office',
-  'dining',
-  'storage',
-  'outdoor',
-  'other',
-];
-
-function normalizeRoom(raw: unknown): Room | null {
-  if (!raw || typeof raw !== 'object') {
-    return null;
-  }
-  const value = raw as Partial<Room>;
-  if (typeof value.id !== 'string' || typeof value.layerId !== 'string') {
-    return null;
-  }
-  const category = ROOM_CATEGORY_IDS.includes(value.category as RoomCategory)
-    ? (value.category as RoomCategory)
-    : 'other';
-  return {
-    id: value.id,
-    layerId: value.layerId,
-    name: typeof value.name === 'string' ? value.name : 'Room',
-    category,
-    x: num(value.x, 0),
-    y: num(value.y, 0),
-    width: Math.max(0.01, num(value.width, 2)),
-    depth: Math.max(0.01, num(value.depth, 2)),
   };
 }
 

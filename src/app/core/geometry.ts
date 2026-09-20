@@ -1,9 +1,7 @@
 import {
   FloorPlan,
   Point,
-  Wall,
   type PlacedObject,
-  type Room,
 } from '../models/floor-plan';
 import { formatLength, type LengthUnit } from './units';
 
@@ -71,57 +69,14 @@ export function snapToRightAngle(origin: Point, point: Point): Point {
 export interface SnapResult {
   point: Point;
   snapped: boolean;
-  kind: 'none' | 'endpoint' | 'edge' | 'object-corner';
-}
-
-export function snapToWalls(
-  p: Point,
-  walls: Wall[],
-  threshold: number,
-  enabled: boolean,
-  ignoreWallId?: string,
-): SnapResult {
-  if (!enabled || threshold <= 0) {
-    return { point: p, snapped: false, kind: 'none' };
-  }
-
-  let best: SnapResult = { point: p, snapped: false, kind: 'none' };
-  let bestD = threshold;
-
-  for (const wall of walls) {
-    if (wall.id === ignoreWallId) {
-      continue;
-    }
-    for (const ep of [wall.start, wall.end]) {
-      const d = dist(p, ep);
-      if (d <= bestD) {
-        bestD = d;
-        best = { point: { x: ep.x, y: ep.y }, snapped: true, kind: 'endpoint' };
-      }
-    }
-  }
-
-  for (const wall of walls) {
-    if (wall.id === ignoreWallId) {
-      continue;
-    }
-    const closest = closestPointOnSegment(p, wall.start, wall.end);
-    if (closest.distance < bestD) {
-      bestD = closest.distance;
-      best = { point: closest.point, snapped: true, kind: 'edge' };
-    }
-  }
-
-  return best;
+  kind: 'none' | 'object-corner';
 }
 
 export function snapToGeometry(
   p: Point,
-  walls: Wall[],
   objects: PlacedObject[],
   threshold: number,
   enabled: boolean,
-  ignoreWallId?: string,
 ): SnapResult {
   if (!enabled || threshold <= 0) {
     return { point: p, snapped: false, kind: 'none' };
@@ -139,24 +94,19 @@ export function snapToGeometry(
       }
     }
   }
-  if (bestCorner.snapped) {
-    return bestCorner;
-  }
-
-  return snapToWalls(p, walls, threshold, true, ignoreWallId);
+  return bestCorner;
 }
 
 export interface ObjectMoveSnap {
   dx: number;
   dy: number;
   snapped: boolean;
-  kind: 'none' | 'edge' | 'endpoint' | 'object-corner';
+  kind: 'none' | 'object-corner';
   point: Point;
 }
 
 export function snapObjectMove(
   moving: PlacedObject[],
-  walls: Wall[],
   others: PlacedObject[],
   threshold: number,
 ): ObjectMoveSnap {
@@ -194,42 +144,7 @@ export function snapObjectMove(
     }
   }
 
-  if (bestCorner.snapped) {
-    return bestCorner;
-  }
-
-  let bestWall = none;
-  let bestWallD = threshold;
-  for (const corner of movingCorners) {
-    for (const wall of walls) {
-      for (const ep of [wall.start, wall.end]) {
-        const d = dist(corner, ep);
-        if (d <= bestWallD) {
-          bestWallD = d;
-          bestWall = {
-            dx: ep.x - corner.x,
-            dy: ep.y - corner.y,
-            snapped: true,
-            kind: 'endpoint',
-            point: { x: ep.x, y: ep.y },
-          };
-        }
-      }
-      const closest = closestPointOnSegment(corner, wall.start, wall.end);
-      if (closest.distance < bestWallD) {
-        bestWallD = closest.distance;
-        bestWall = {
-          dx: closest.point.x - corner.x,
-          dy: closest.point.y - corner.y,
-          snapped: true,
-          kind: 'edge',
-          point: closest.point,
-        };
-      }
-    }
-  }
-
-  return bestWall;
+  return bestCorner;
 }
 
 export function pointInRect(p: Point, x: number, y: number, width: number, depth: number): boolean {
@@ -253,17 +168,9 @@ export function pointInEllipse(
   return nx * nx + ny * ny <= 1;
 }
 
-export function wallHit(p: Point, wall: Wall, extra: number): boolean {
-  const { distance } = closestPointOnSegment(p, wall.start, wall.end);
-  return distance <= wall.thickness / 2 + extra;
-}
-
 export type Hit =
   | { type: 'object'; id: string }
-  | { type: 'wall'; id: string }
-  | { type: 'room'; id: string }
   | { type: 'measurement'; id: string }
-  | { type: 'wall-end'; id: string; end: 'start' | 'end' }
   | { type: 'measurement-end'; id: string; end: 'start' | 'end' }
   | { type: 'rotate-object'; id: string }
   | { type: 'rotate-objects'; ids: string[] };
@@ -385,12 +292,11 @@ export function hitTest(
   zoom: number,
   handles: {
     objects: readonly PlacedObject[];
-    wallId: string | null;
     measurementId: string | null;
   },
 ): Hit | null {
   const handleR = 10 / zoom;
-  const wallExtra = 8 / zoom;
+  const measureExtra = 8 / zoom;
 
   const selectedObjects = handles.objects;
   if (selectedObjects.length > 1) {
@@ -406,18 +312,6 @@ export function hitTest(
     for (const item of rotationHandles(selectedObjects[0], zoom)) {
       if (dist(p, item.handle) <= handleR) {
         return { type: 'rotate-object', id: selectedObjects[0].id };
-      }
-    }
-  }
-
-  if (handles.wallId) {
-    const wall = plan.walls.find((item) => item.id === handles.wallId);
-    if (wall) {
-      if (dist(p, wall.start) <= handleR) {
-        return { type: 'wall-end', id: wall.id, end: 'start' };
-      }
-      if (dist(p, wall.end) <= handleR) {
-        return { type: 'wall-end', id: wall.id, end: 'end' };
       }
     }
   }
@@ -438,48 +332,15 @@ export function hitTest(
   for (let i = measurements.length - 1; i >= 0; i -= 1) {
     const measurement = measurements[i];
     const { distance } = closestPointOnSegment(p, measurement.start, measurement.end);
-    if (distance <= wallExtra) {
+    if (distance <= measureExtra) {
       return { type: 'measurement', id: measurement.id };
     }
   }
 
-  const hidden = new Set(plan.layers.filter((layer) => !layer.visible).map((layer) => layer.id));
-  const locked = new Set(plan.layers.filter((layer) => layer.locked).map((layer) => layer.id));
-
-  for (let i = plan.layers.length - 1; i >= 0; i -= 1) {
-    const layer = plan.layers[i];
-    if (hidden.has(layer.id) || locked.has(layer.id)) {
-      continue;
-    }
-
-    for (let j = plan.objects.length - 1; j >= 0; j -= 1) {
-      const obj = plan.objects[j];
-      if (obj.layerId !== layer.id) {
-        continue;
-      }
-      if (objectContains(obj, p)) {
-        return { type: 'object', id: obj.id };
-      }
-    }
-
-    for (let j = plan.walls.length - 1; j >= 0; j -= 1) {
-      const wall = plan.walls[j];
-      if (wall.layerId !== layer.id) {
-        continue;
-      }
-      if (wallHit(p, wall, wallExtra)) {
-        return { type: 'wall', id: wall.id };
-      }
-    }
-
-    for (let j = plan.rooms.length - 1; j >= 0; j -= 1) {
-      const room = plan.rooms[j];
-      if (room.layerId !== layer.id) {
-        continue;
-      }
-      if (pointInRect(p, room.x, room.y, room.width, room.depth)) {
-        return { type: 'room', id: room.id };
-      }
+  for (let j = plan.objects.length - 1; j >= 0; j -= 1) {
+    const obj = plan.objects[j];
+    if (objectContains(obj, p)) {
+      return { type: 'object', id: obj.id };
     }
   }
 
@@ -521,17 +382,10 @@ export function contentBBox(
     include(0, 0, imageSize.width, imageSize.height);
   }
 
-  for (const wall of plan.walls) {
-    include(wall.start.x, wall.start.y);
-    include(wall.end.x, wall.end.y);
-  }
   for (const obj of plan.objects) {
     for (const corner of objectCorners(obj)) {
       include(corner.x, corner.y);
     }
-  }
-  for (const room of plan.rooms) {
-    include(room.x, room.y, room.width, room.depth);
   }
   for (const measurement of plan.measurements ?? []) {
     include(measurement.start.x, measurement.start.y);
@@ -572,16 +426,4 @@ export function dimensionView(
     tickDx: -dy * inv,
     tickDy: dx * inv,
   };
-}
-
-export function usedRoomCategories(rooms: Room[]): Room['category'][] {
-  const seen = new Set<Room['category']>();
-  const result: Room['category'][] = [];
-  for (const room of rooms) {
-    if (!seen.has(room.category)) {
-      seen.add(room.category);
-      result.push(room.category);
-    }
-  }
-  return result;
 }

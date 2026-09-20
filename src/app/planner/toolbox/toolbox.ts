@@ -2,22 +2,18 @@ import { NgComponentOutlet } from '@angular/common';
 import { Component, Type, inject } from '@angular/core';
 import {
   MsrArrowSelectorToolIconComponent,
-  MsrBrickIconComponent,
   MsrCircleIconComponent,
   MsrPanToolAltIconComponent,
   MsrRectangleIconComponent,
-  MsrSpaceDashboardIconComponent,
   MsrSquareFootIconComponent,
   MsrStadiumIconComponent,
   MsrStraightenIconComponent,
 } from '@captains-chest/material-symbols-rounded-icons';
 import {
   MsrfArrowSelectorToolIconComponent,
-  MsrfBrickIconComponent,
   MsrfCircleIconComponent,
   MsrfPanToolAltIconComponent,
   MsrfRectangleIconComponent,
-  MsrfSpaceDashboardIconComponent,
   MsrfSquareFootIconComponent,
   MsrfStadiumIconComponent,
   MsrfStraightenIconComponent,
@@ -210,25 +206,6 @@ export class Toolbox {
           shortcut: 'M',
           icon: MsrStraightenIconComponent,
           activeIcon: MsrfStraightenIconComponent,
-        },
-      ],
-    },
-    {
-      name: 'Draw',
-      tools: [
-        {
-          id: 'wall',
-          label: 'Wall',
-          shortcut: 'W',
-          icon: MsrBrickIconComponent,
-          activeIcon: MsrfBrickIconComponent,
-        },
-        {
-          id: 'room',
-          label: 'Room',
-          shortcut: 'G',
-          icon: MsrSpaceDashboardIconComponent,
-          activeIcon: MsrfSpaceDashboardIconComponent,
         },
       ],
     },

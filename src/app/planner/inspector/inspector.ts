@@ -1,5 +1,4 @@
 import { Component, inject } from '@angular/core';
-import { ROOM_CATEGORIES, RoomCategory } from '../../models/floor-plan';
 import { dist } from '../../core/geometry';
 import { PlannerStore } from '../../core/planner-store';
 import {
@@ -190,14 +189,6 @@ import { StackOrder } from './stack-order/stack-order';
             (change)="patchObject({ rotation: numberValue($event) })"
           />
         </label>
-        <label>
-          Layer
-          <select [value]="obj.layerId" (change)="patchObject({ layerId: inputValue($event) })">
-            @for (layer of store.plan().layers; track layer.id) {
-              <option [value]="layer.id">{{ layer.name }}</option>
-            }
-          </select>
-        </label>
         <button type="button" class="action" (click)="store.copySelection()">Copy object</button>
         <app-stack-order />
         <button class="danger" type="button" (click)="store.deleteSelection()">
@@ -212,75 +203,9 @@ import { StackOrder } from './stack-order/stack-order';
         <button class="danger" type="button" (click)="store.deleteSelection()">
           Delete measurement
         </button>
-      } @else if (store.selectedWall(); as wall) {
-        <p class="metric">Length: {{ format(dist(wall.start, wall.end)) }}</p>
-        <label>
-          Thickness ({{ store.lengthUnit() }})
-          <input
-            type="number"
-            [min]="min()"
-            [step]="step()"
-            [value]="display(wall.thickness)"
-            (change)="patchWallThickness($event)"
-          />
-        </label>
-        <label>
-          Layer
-          <select [value]="wall.layerId" (change)="patchWallLayer($event)">
-            @for (layer of store.plan().layers; track layer.id) {
-              <option [value]="layer.id">{{ layer.name }}</option>
-            }
-          </select>
-        </label>
-        <button class="danger" type="button" (click)="store.deleteSelection()">Delete wall</button>
-      } @else if (store.selectedRoom(); as room) {
-        <label>
-          Name
-          <input [value]="room.name" (change)="patchRoom({ name: inputValue($event) })" />
-        </label>
-        <label>
-          Category
-          <select [value]="room.category" (change)="patchRoomCategory($event)">
-            @for (category of categories; track category.id) {
-              <option [value]="category.id">{{ category.label }}</option>
-            }
-          </select>
-        </label>
-        <div class="row">
-          <label>
-            Width ({{ store.lengthUnit() }})
-            <input
-              type="number"
-              [min]="min()"
-              [step]="step()"
-              [value]="display(room.width)"
-              (change)="patchRoom({ width: lengthValue($event) })"
-            />
-          </label>
-          <label>
-            Depth ({{ store.lengthUnit() }})
-            <input
-              type="number"
-              [min]="min()"
-              [step]="step()"
-              [value]="display(room.depth)"
-              (change)="patchRoom({ depth: lengthValue($event) })"
-            />
-          </label>
-        </div>
-        <p class="metric">{{ format(room.width) }} × {{ format(room.depth) }}</p>
-        <label>
-          Layer
-          <select [value]="room.layerId" (change)="patchRoom({ layerId: inputValue($event) })">
-            @for (layer of store.plan().layers; track layer.id) {
-              <option [value]="layer.id">{{ layer.name }}</option>
-            }
-          </select>
-        </label>
-        <button class="danger" type="button" (click)="store.deleteSelection()">Delete room</button>
       } @else {
         <p class="empty">
-          Select a wall, room, object, or measurement. Enter sizes in {{ store.lengthUnit() }}.
+          Select an object or measurement. Enter sizes in {{ store.lengthUnit() }}.
         </p>
       }
     </div>
@@ -288,7 +213,6 @@ import { StackOrder } from './stack-order/stack-order';
 })
 export class Inspector {
   protected readonly store = inject(PlannerStore);
-  protected readonly categories = ROOM_CATEGORIES;
   protected readonly dist = dist;
   protected readonly abs = Math.abs;
 
@@ -321,7 +245,7 @@ export class Inspector {
   }
 
   protected inputValue(event: Event): string {
-    return (event.target as HTMLInputElement | HTMLSelectElement).value;
+    return (event.target as HTMLInputElement).value;
   }
 
   protected numberValue(event: Event): number {
@@ -332,7 +256,6 @@ export class Inspector {
     name?: string;
     width?: number;
     depth?: number;
-    layerId?: string;
     rotation?: number;
   }): void {
     const obj = this.store.selectedObject();
@@ -349,50 +272,5 @@ export class Inspector {
       return;
     }
     this.store.updateObject(obj.id, patch);
-  }
-
-  protected patchWallThickness(event: Event): void {
-    const wall = this.store.selectedWall();
-    const thickness = this.lengthValue(event);
-    if (!wall || !(thickness > 0)) {
-      return;
-    }
-    this.store.updateWall(wall.id, { thickness });
-  }
-
-  protected patchWallLayer(event: Event): void {
-    const wall = this.store.selectedWall();
-    if (!wall) {
-      return;
-    }
-    this.store.updateWall(wall.id, { layerId: this.inputValue(event) });
-  }
-
-  protected patchRoom(patch: {
-    name?: string;
-    width?: number;
-    depth?: number;
-    layerId?: string;
-  }): void {
-    const room = this.store.selectedRoom();
-    if (!room) {
-      return;
-    }
-    if (patch.width != null && !(patch.width > 0)) {
-      return;
-    }
-    if (patch.depth != null && !(patch.depth > 0)) {
-      return;
-    }
-    this.store.updateRoom(room.id, patch);
-  }
-
-  protected patchRoomCategory(event: Event): void {
-    const room = this.store.selectedRoom();
-    const category = this.inputValue(event) as RoomCategory;
-    if (!room) {
-      return;
-    }
-    this.store.updateRoom(room.id, { category });
   }
 }
