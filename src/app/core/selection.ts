@@ -9,6 +9,7 @@ import {
 import {
   type BoundingBox,
   type Hit,
+  measurementLine,
   normalizeRect,
   objectContains,
   objectCorners,
@@ -125,10 +126,11 @@ export const collectBoxSelection = (plan: FloorPlan, start: Point, current: Poin
 
   const measurementIds: string[] = [];
   for (const measurement of plan.measurements ?? []) {
+    const line = measurementLine(measurement);
     if (
       windowMode
-        ? segmentFullyInside(measurement.start, measurement.end, box)
-        : segmentCrossesBox(measurement.start, measurement.end, box)
+        ? segmentFullyInside(line.start, line.end, box)
+        : segmentCrossesBox(line.start, line.end, box)
     ) {
       measurementIds.push(measurement.id);
     }

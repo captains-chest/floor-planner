@@ -196,7 +196,7 @@ function normalizeMeasurement(raw: unknown): Measurement | null {
   if (!start || !end) {
     return null;
   }
-  return { id: value.id, start, end };
+  return { id: value.id, start, end, offset: num(value.offset, 0) };
 }
 
 function normalizeObject(raw: unknown): PlacedObject | null {

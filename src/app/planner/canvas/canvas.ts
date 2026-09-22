@@ -23,12 +23,15 @@ import {
   dist,
   hitTest,
   itemsBBox,
+  linePointToMeasured,
+  measurementLine,
   midpoint,
   normalizeRect,
   objectCenter,
   rotatedObjectPose,
   rotationHandles,
   rotationHandlesFromBox,
+  signedPerpendicularOffset,
   SnapResult,
   snapAngle,
   snapObjectMove,
@@ -365,6 +368,24 @@ type DragState =
         @for (item of measurements(); track item.id) {
           <g [attr.opacity]="item.selected ? 1 : 0.92">
             <line
+              [attr.x1]="item.originStart.x"
+              [attr.y1]="item.originStart.y"
+              [attr.x2]="item.start.x"
+              [attr.y2]="item.start.y"
+              stroke="var(--measure)"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"
+            />
+            <line
+              [attr.x1]="item.originEnd.x"
+              [attr.y1]="item.originEnd.y"
+              [attr.x2]="item.end.x"
+              [attr.y2]="item.end.y"
+              stroke="var(--measure)"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"
+            />
+            <line
               [attr.x1]="item.start.x"
               [attr.y1]="item.start.y"
               [attr.x2]="item.end.x"
@@ -404,10 +425,10 @@ type DragState =
           </g>
         }
 
-        @if (selectedMeasurement(); as measurement) {
+        @if (selectedMeasurementHandles(); as handles) {
           <rect
-            [attr.x]="measurement.start.x - handleSize() / 2"
-            [attr.y]="measurement.start.y - handleSize() / 2"
+            [attr.x]="handles.start.x - handleSize() / 2"
+            [attr.y]="handles.start.y - handleSize() / 2"
             [attr.width]="handleSize()"
             [attr.height]="handleSize()"
             fill="var(--measure)"
@@ -416,8 +437,8 @@ type DragState =
             vector-effect="non-scaling-stroke"
           />
           <rect
-            [attr.x]="measurement.end.x - handleSize() / 2"
-            [attr.y]="measurement.end.y - handleSize() / 2"
+            [attr.x]="handles.end.x - handleSize() / 2"
+            [attr.y]="handles.end.y - handleSize() / 2"
             [attr.width]="handleSize()"
             [attr.height]="handleSize()"
             fill="var(--measure)"
@@ -452,6 +473,24 @@ type DragState =
         }
 
         @if (measurePreview(); as preview) {
+          <line
+            [attr.x1]="preview.originStart.x"
+            [attr.y1]="preview.originStart.y"
+            [attr.x2]="preview.start.x"
+            [attr.y2]="preview.start.y"
+            stroke="var(--measure)"
+            stroke-width="1.5"
+            vector-effect="non-scaling-stroke"
+          />
+          <line
+            [attr.x1]="preview.originEnd.x"
+            [attr.y1]="preview.originEnd.y"
+            [attr.x2]="preview.end.x"
+            [attr.y2]="preview.end.y"
+            stroke="var(--measure)"
+            stroke-width="1.5"
+            vector-effect="non-scaling-stroke"
+          />
           <line
             [attr.x1]="preview.start.x"
             [attr.y1]="preview.start.y"
@@ -555,7 +594,7 @@ export class Canvas {
   private readonly viewportSize = signal({ width: 800, height: 600 });
   private readonly drag = signal<DragState>({ type: 'none' });
   protected readonly scaleP1 = signal<Point | null>(null);
-  protected readonly measureP1 = signal<Point | null>(null);
+  protected readonly measureDraft = signal<{ start: Point; end?: Point } | null>(null);
   protected readonly cursor = signal<Point | null>(null);
   protected readonly snap = signal<SnapResult>({
     point: { x: 0, y: 0 },
@@ -573,6 +612,10 @@ export class Canvas {
   protected readonly imageWidth = computed(() => this.store.imageSizeMeters()?.width ?? 0);
   protected readonly imageHeight = computed(() => this.store.imageSizeMeters()?.height ?? 0);
   protected readonly selectedMeasurement = this.store.selectedMeasurement;
+  protected readonly selectedMeasurementHandles = computed(() => {
+    const measurement = this.selectedMeasurement();
+    return measurement ? measurementLine(measurement) : null;
+  });
 
   protected readonly viewBox = computed(() => {
     const { panX, panY, zoom } = this.store.plan().viewport;
@@ -656,20 +699,26 @@ export class Canvas {
   });
 
   protected readonly measurePreview = computed(() => {
-    const p1 = this.measureP1();
-    if (!p1 || this.store.tool() !== 'measure') {
+    const draft = this.measureDraft();
+    if (!draft || this.store.tool() !== 'measure') {
       return null;
     }
-    const raw = this.snap().snapped ? this.snap().point : (this.cursor() ?? p1);
-    const p2 = this.constrainOrthoPoint(p1, raw, this.altHeld());
-    return dimensionView(p1, p2, this.handleSize() * 0.9, this.store.lengthUnit());
+    const tick = this.handleSize() * 0.9;
+    const unit = this.store.lengthUnit();
+    const raw = this.snap().snapped ? this.snap().point : (this.cursor() ?? draft.start);
+    if (!draft.end) {
+      const end = this.constrainOrthoPoint(draft.start, raw, this.altHeld());
+      return dimensionView(draft.start, end, tick, unit);
+    }
+    const offset = signedPerpendicularOffset(draft.start, draft.end, raw);
+    return dimensionView(draft.start, draft.end, tick, unit, offset);
   });
 
   protected readonly measurements = computed(() => {
     const selectedIds = new Set(this.highlightedMeasurements().map((item) => item.id));
     const tick = this.handleSize() * 0.9;
     return (this.store.plan().measurements ?? []).map((item) => ({
-      ...dimensionView(item.start, item.end, tick, this.store.lengthUnit()),
+      ...dimensionView(item.start, item.end, tick, this.store.lengthUnit(), item.offset ?? 0),
       id: item.id,
       selected: selectedIds.has(item.id),
     }));
@@ -846,7 +895,7 @@ export class Canvas {
     effect(() => {
       this.store.tool();
       this.scaleP1.set(null);
-      this.measureP1.set(null);
+      this.measureDraft.set(null);
     });
   }
 
@@ -854,7 +903,7 @@ export class Canvas {
     this.store.endEdit();
     this.drag.set({ type: 'none' });
     this.scaleP1.set(null);
-    this.measureP1.set(null);
+    this.measureDraft.set(null);
   }
 
   protected onModifierDown(event: KeyboardEvent): void {
@@ -953,18 +1002,25 @@ export class Canvas {
     }
 
     if (tool === 'measure') {
-      const p1 = this.measureP1();
-      if (!p1) {
-        this.measureP1.set({ ...snapped.point });
+      const draft = this.measureDraft();
+      if (!draft) {
+        this.measureDraft.set({ start: { ...snapped.point } });
         this.store.setStatus('Click the other end to measure · hold Alt for 90°');
-      } else {
+      } else if (!draft.end) {
         const end = this.constrainOrthoPoint(
-          p1,
+          draft.start,
           snapped.point,
           event.altKey || this.altHeld(),
         );
-        this.store.addMeasurement(p1, end);
-        this.measureP1.set(null);
+        if (dist(draft.start, end) < 0.01) {
+          return;
+        }
+        this.measureDraft.set({ start: draft.start, end });
+        this.store.setStatus('Click to place the dimension line');
+      } else {
+        const offset = signedPerpendicularOffset(draft.start, draft.end, snapped.point);
+        this.store.addMeasurement(draft.start, draft.end, offset);
+        this.measureDraft.set(null);
       }
       return;
     }
@@ -1173,13 +1229,17 @@ export class Canvas {
         this.store.beginEdit();
         this.drag.set({ ...drag, recorded: true });
       }
-      const origin =
-        drag.end === 'start'
-          ? this.store.plan().measurements.find((item) => item.id === drag.id)?.end
-          : this.store.plan().measurements.find((item) => item.id === drag.id)?.start;
-      const point = origin
-        ? this.constrainOrthoPoint(origin, snapped.point, event.altKey || this.altHeld())
-        : snapped.point;
+      const measurement = this.store.plan().measurements.find((item) => item.id === drag.id);
+      if (!measurement) {
+        return;
+      }
+      const measuredPoint = linePointToMeasured(measurement, snapped.point);
+      const origin = drag.end === 'start' ? measurement.end : measurement.start;
+      const point = this.constrainOrthoPoint(
+        origin,
+        measuredPoint,
+        event.altKey || this.altHeld(),
+      );
       if (drag.end === 'start') {
         this.store.updateMeasurement(drag.id, { start: { ...point } });
       } else {

@@ -56,6 +56,8 @@ export interface Measurement {
   id: string;
   start: Point;
   end: Point;
+  /** Signed perpendicular distance from the measured segment to the dimension line, in meters. */
+  offset: number;
 }
 
 export interface FloorPlan {

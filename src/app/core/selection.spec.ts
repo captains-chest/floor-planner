@@ -36,6 +36,7 @@ const measurementAt = (
   id,
   start: { x: x1, y: y1 },
   end: { x: x2, y: y2 },
+  offset: 0,
 });
 
 const withObjects = (
@@ -146,5 +147,23 @@ describe('selectBox', () => {
     const selection = selectBox(mixed, null, pick, false);
     expect(selection?.type).toBe('multi');
     expect(selectionCount(mixed, selection)).toBe(2);
+  });
+
+  it('window-selects the offset dimension line', () => {
+    const plan: FloorPlan = {
+      ...createDefaultPlan(),
+      measurements: [
+        {
+          id: 'm1',
+          start: { x: 0, y: 0 },
+          end: { x: 4, y: 0 },
+          offset: 2,
+        },
+      ],
+    };
+    const aroundLine = collectBoxSelection(plan, { x: -0.5, y: 1.5 }, { x: 4.5, y: 2.5 });
+    expect(aroundLine.measurementIds).toEqual(['m1']);
+    const aroundOrigin = collectBoxSelection(plan, { x: -0.5, y: -0.5 }, { x: 4.5, y: 0.5 });
+    expect(aroundOrigin.measurementIds).toEqual([]);
   });
 });

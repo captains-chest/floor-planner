@@ -396,7 +396,11 @@ export class PlanEdit {
     };
   }
 
-  addMeasurement(start: Point, end: Point): { measurement: Measurement } | PlanEditResult {
+  addMeasurement(
+    start: Point,
+    end: Point,
+    offset = 0,
+  ): { measurement: Measurement } | PlanEditResult {
     if (dist(start, end) < 0.01) {
       return { notice: null };
     }
@@ -404,6 +408,7 @@ export class PlanEdit {
       id: createId('measure'),
       start: { ...start },
       end: { ...end },
+      offset,
     };
     this.#record();
     this.#plan = {
@@ -413,7 +418,10 @@ export class PlanEdit {
     return { measurement };
   }
 
-  updateMeasurement(id: string, patch: Partial<Pick<Measurement, 'start' | 'end'>>): void {
+  updateMeasurement(
+    id: string,
+    patch: Partial<Pick<Measurement, 'start' | 'end' | 'offset'>>,
+  ): void {
     this.#record();
     this.#plan = {
       ...this.#plan,
@@ -459,6 +467,7 @@ export class PlanEdit {
         ...item,
         start: scalePoint(item.start, factor),
         end: scalePoint(item.end, factor),
+        offset: (item.offset ?? 0) * factor,
       })),
       viewport: {
         panX: this.#plan.viewport.panX * factor,

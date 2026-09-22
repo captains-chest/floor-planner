@@ -75,6 +75,20 @@ describe('PlanEdit', () => {
     expect(edit.plan.background?.calibrated).toBe(true);
   });
 
+  it('stores a measurement offset and scales it with the plan', () => {
+    const edit = new PlanEdit();
+    const added = edit.addMeasurement({ x: 0, y: 0 }, { x: 2, y: 0 }, 0.5);
+    expect('measurement' in added).toBe(true);
+    if (!('measurement' in added)) {
+      return;
+    }
+    expect(added.measurement.offset).toBe(0.5);
+    edit.applyScale({ x: 0, y: 0 }, { x: 2, y: 0 }, 4);
+    expect(edit.plan.measurements[0].start).toEqual({ x: 0, y: 0 });
+    expect(edit.plan.measurements[0].end).toEqual({ x: 4, y: 0 });
+    expect(edit.plan.measurements[0].offset).toBe(1);
+  });
+
   it('records one undo step for a gesture of live poses', () => {
     const edit = new PlanEdit();
     edit.hydrate(

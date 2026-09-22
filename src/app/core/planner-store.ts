@@ -322,8 +322,8 @@ export class PlannerStore {
     this.#sync();
   }
 
-  addMeasurement(start: Point, end: Point): Measurement | null {
-    const result = this.#edit.addMeasurement(start, end);
+  addMeasurement(start: Point, end: Point, offset = 0): Measurement | null {
+    const result = this.#edit.addMeasurement(start, end, offset);
     this.#sync();
     if ('measurement' in result) {
       this.#selection.set({ type: 'measurement', id: result.measurement.id });
@@ -334,7 +334,10 @@ export class PlannerStore {
     return null;
   }
 
-  updateMeasurement(id: string, patch: Partial<Pick<Measurement, 'start' | 'end'>>): void {
+  updateMeasurement(
+    id: string,
+    patch: Partial<Pick<Measurement, 'start' | 'end' | 'offset'>>,
+  ): void {
     this.#edit.updateMeasurement(id, patch);
     this.#sync();
   }
@@ -473,7 +476,7 @@ const toolHint = (tool: Tool): string => {
     case 'scale':
       return 'Click two points on a known length · hold Alt to snap to 90°';
     case 'measure':
-      return 'Click two points to measure · snaps to object corners · Alt: 90°';
+      return 'Click start, end, then place the dimension line · snaps to object corners · Alt: 90°';
     case 'rect':
       return 'Click and drag to place a rectangle';
     case 'circle':

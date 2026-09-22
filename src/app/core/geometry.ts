@@ -1,5 +1,6 @@
 import {
   FloorPlan,
+  Measurement,
   Point,
   type PlacedObject,
 } from '../models/floor-plan';
@@ -52,6 +53,51 @@ export function closestPointOnSegment(
   const t = clamp(((p.x - a.x) * dx + (p.y - a.y) * dy) / len2, 0, 1);
   const point = { x: a.x + t * dx, y: a.y + t * dy };
   return { point, t, distance: dist(p, point) };
+}
+
+export function unitPerpendicular(start: Point, end: Point): Point {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-9) {
+    return { x: 0, y: 0 };
+  }
+  return { x: -dy / length || 0, y: dx / length || 0 };
+}
+
+export function signedPerpendicularOffset(start: Point, end: Point, point: Point): number {
+  const normal = unitPerpendicular(start, end);
+  return (point.x - start.x) * normal.x + (point.y - start.y) * normal.y;
+}
+
+export function offsetSegment(
+  start: Point,
+  end: Point,
+  offset: number,
+): { start: Point; end: Point } {
+  const normal = unitPerpendicular(start, end);
+  return {
+    start: { x: start.x + normal.x * offset, y: start.y + normal.y * offset },
+    end: { x: end.x + normal.x * offset, y: end.y + normal.y * offset },
+  };
+}
+
+export function measurementLine(
+  measurement: Pick<Measurement, 'start' | 'end' | 'offset'>,
+): { start: Point; end: Point } {
+  return offsetSegment(measurement.start, measurement.end, measurement.offset ?? 0);
+}
+
+export function linePointToMeasured(
+  measurement: Pick<Measurement, 'start' | 'end' | 'offset'>,
+  linePoint: Point,
+): Point {
+  const normal = unitPerpendicular(measurement.start, measurement.end);
+  const offset = measurement.offset ?? 0;
+  return {
+    x: linePoint.x - normal.x * offset,
+    y: linePoint.y - normal.y * offset,
+  };
 }
 
 export function snapToRightAngle(origin: Point, point: Point): Point {
@@ -319,10 +365,11 @@ export function hitTest(
   if (handles.measurementId) {
     const measurement = (plan.measurements ?? []).find((item) => item.id === handles.measurementId);
     if (measurement) {
-      if (dist(p, measurement.start) <= handleR) {
+      const line = measurementLine(measurement);
+      if (dist(p, line.start) <= handleR) {
         return { type: 'measurement-end', id: measurement.id, end: 'start' };
       }
-      if (dist(p, measurement.end) <= handleR) {
+      if (dist(p, line.end) <= handleR) {
         return { type: 'measurement-end', id: measurement.id, end: 'end' };
       }
     }
@@ -331,7 +378,8 @@ export function hitTest(
   const measurements = plan.measurements ?? [];
   for (let i = measurements.length - 1; i >= 0; i -= 1) {
     const measurement = measurements[i];
-    const { distance } = closestPointOnSegment(p, measurement.start, measurement.end);
+    const line = measurementLine(measurement);
+    const { distance } = closestPointOnSegment(p, line.start, line.end);
     if (distance <= measureExtra) {
       return { type: 'measurement', id: measurement.id };
     }
@@ -390,6 +438,9 @@ export function contentBBox(
   for (const measurement of plan.measurements ?? []) {
     include(measurement.start.x, measurement.start.y);
     include(measurement.end.x, measurement.end.y);
+    const line = measurementLine(measurement);
+    include(line.start.x, line.start.y);
+    include(line.end.x, line.end.y);
   }
 
   if (!Number.isFinite(minX)) {
@@ -402,6 +453,8 @@ export function contentBBox(
 export interface DimensionView {
   start: Point;
   end: Point;
+  originStart: Point;
+  originEnd: Point;
   mid: Point;
   lengthLabel: string;
   tickDx: number;
@@ -413,17 +466,19 @@ export function dimensionView(
   end: Point,
   tickLength: number,
   unit: LengthUnit = 'm',
+  offset = 0,
 ): DimensionView {
   const length = dist(start, end);
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const inv = length > 1e-9 ? tickLength / length : 0;
+  const line = offsetSegment(start, end, offset);
+  const normal = unitPerpendicular(start, end);
   return {
-    start,
-    end,
-    mid: midpoint(start, end),
+    start: line.start,
+    end: line.end,
+    originStart: start,
+    originEnd: end,
+    mid: midpoint(line.start, line.end),
     lengthLabel: formatLength(length, unit),
-    tickDx: -dy * inv,
-    tickDy: dx * inv,
+    tickDx: normal.x * tickLength,
+    tickDy: normal.y * tickLength,
   };
 }

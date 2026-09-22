@@ -57,6 +57,7 @@ describe('parseProjectDocument', () => {
     expect(parsed?.plan).not.toHaveProperty('layers');
     expect(parsed?.plan).not.toHaveProperty('activeLayerId');
     expect(parsed?.plan).not.toHaveProperty('rooms');
+    expect(parsed?.plan.measurements).toEqual([]);
     expect(parsed?.plan.objects).toEqual([
       {
         id: 'o1',
@@ -68,6 +69,49 @@ describe('parseProjectDocument', () => {
         depth: 0.8,
         rotation: 0,
         groupId: null,
+      },
+    ]);
+  });
+
+  it('keeps a measurement offset and defaults missing offsets to 0', () => {
+    const parsed = parseProjectDocument({
+      kind: PROJECT_KIND,
+      formatVersion: 1,
+      plan: {
+        version: 1,
+        name: 'Measured',
+        background: null,
+        objects: [],
+        measurements: [
+          {
+            id: 'm1',
+            start: { x: 0, y: 0 },
+            end: { x: 2, y: 0 },
+            offset: 0.4,
+          },
+          {
+            id: 'm2',
+            start: { x: 0, y: 1 },
+            end: { x: 1, y: 1 },
+          },
+        ],
+        groups: [],
+        viewport: { panX: 0, panY: 0, zoom: 40 },
+      },
+    });
+
+    expect(parsed?.plan.measurements).toEqual([
+      {
+        id: 'm1',
+        start: { x: 0, y: 0 },
+        end: { x: 2, y: 0 },
+        offset: 0.4,
+      },
+      {
+        id: 'm2',
+        start: { x: 0, y: 1 },
+        end: { x: 1, y: 1 },
+        offset: 0,
       },
     ]);
   });
