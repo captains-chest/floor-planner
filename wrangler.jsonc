@@ -1,0 +1,9 @@
+{
+  "name": "floor-planner",
+  "compatibility_date": "2026-09-26",
+  "assets": {
+    "directory": "./dist/floor-planner/browser",
+    "not_found_handling": "single-page-application"
+  },
+  "previews": {}
+}
