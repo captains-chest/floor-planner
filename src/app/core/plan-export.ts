@@ -54,7 +54,7 @@ export function renderPlanSvg(
   const width = drawWidth;
   const height = drawHeight + HEADER_PX + FOOTER_PX;
   const m = (px: number) => px / pxPerMeter;
-  const label = m(13);
+  const label = m(18);
 
   const parts: string[] = [];
   if (imageSize && imageDataUrl) {
@@ -101,13 +101,13 @@ export function renderPlanSvg(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">` +
     `<title>${esc(plan.name)}</title>` +
     `<rect width="100%" height="100%" fill="#ffffff"/>` +
-    `<text x="16" y="29" font-size="20" font-weight="700" fill="${INK}">${esc(plan.name)}</text>` +
+    `<text x="16" y="29" font-size="24" font-weight="700" fill="${INK}">${esc(plan.name)}</text>` +
     `<svg x="0" y="${HEADER_PX}" width="${drawWidth}" height="${drawHeight}" viewBox="${n(box.x)} ${n(box.y)} ${n(box.width)} ${n(box.depth)}">${parts.join('')}</svg>` +
     `<g class="scale-bar" fill="${INK}" stroke="${INK}">` +
     `<line x1="16" y1="${footerY}" x2="${n(16 + barPx)}" y2="${footerY}" stroke-width="3"/>` +
     `<line x1="16" y1="${footerY - 6}" x2="16" y2="${footerY + 6}" stroke-width="2"/>` +
     `<line x1="${n(16 + barPx)}" y1="${footerY - 6}" x2="${n(16 + barPx)}" y2="${footerY + 6}" stroke-width="2"/>` +
-    `<text x="${n(24 + barPx)}" y="${footerY + 5}" font-size="13" stroke="none">${esc(bar.label)}</text>` +
+    `<text x="${n(24 + barPx)}" y="${footerY + 5}" font-size="16" stroke="none">${esc(bar.label)}</text>` +
     `</g></svg>`;
   return { svg, width, height };
 }
