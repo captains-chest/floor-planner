@@ -72,6 +72,8 @@ type DragState =
 @Component({
   selector: 'app-canvas',
   host: {
+    role: 'main',
+    'aria-label': 'Floor plan drawing',
     '(document:keydown)': 'onModifierDown($event)',
     '(document:keyup)': 'onModifierUp($event)',
     '(window:blur)': 'onModifierBlur()',

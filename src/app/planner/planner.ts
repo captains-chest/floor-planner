@@ -30,6 +30,10 @@ import { Toolbox } from './toolbox/toolbox';
       grid-column: 1 / -1;
     }
 
+    .tools {
+      display: contents;
+    }
+
     app-toolbox,
     app-canvas,
     app-inspector {
@@ -138,11 +142,11 @@ import { Toolbox } from './toolbox/toolbox';
       <div class="boot">Loading saved plan…</div>
     } @else {
       <app-toolbar />
-      <app-toolbox />
+      <nav class="tools" aria-label="Drawing tools"><app-toolbox /></nav>
       <app-canvas />
       <app-inspector />
-      <div class="status">
-        <span>{{ store.status() }}</span>
+      <div class="status" role="contentinfo">
+        <span role="status" aria-live="polite">{{ store.status() }}</span>
         <span
           >Units: {{ store.lengthUnit() }} · Shift: no snap · Alt: 90° · Ctrl: corner snap ·
           Space: pan</span

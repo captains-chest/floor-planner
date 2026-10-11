@@ -12,6 +12,7 @@ import { StackOrder } from './stack-order/stack-order';
 
 @Component({
   selector: 'app-inspector',
+  host: { role: 'complementary', 'aria-label': 'Properties' },
   imports: [StackOrder],
   styles: `
     :host {
@@ -26,7 +27,7 @@ import { StackOrder } from './stack-order/stack-order';
       overflow: hidden;
     }
 
-    header {
+    .header {
       padding: 12px;
       border-bottom: 1px solid var(--border);
     }
@@ -114,9 +115,9 @@ import { StackOrder } from './stack-order/stack-order';
     }
   `,
   template: `
-    <header>
+    <div class="header">
       <h2>Properties</h2>
-    </header>
+    </div>
     <div class="body">
       @if (store.selectedGroup(); as group) {
         <label>
