@@ -16,6 +16,10 @@ _Avoid_: highlight, focus
 A placed rectangle, circle, or ellipse. May belong to a group.
 _Avoid_: furniture, shape (shape is only the kind: rect/circle/ellipse)
 
+**Furniture library**:
+The built-in list of ready-made pieces (name, shape, typical size). Placing one creates an ordinary object with that name and size; the object keeps no link to the library.
+_Avoid_: calling placed objects "furniture"
+
 **Group**:
 A set of objects that move and rotate together.
 

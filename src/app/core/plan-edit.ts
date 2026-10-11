@@ -205,12 +205,13 @@ export class PlanEdit {
     y: number,
     width: number,
     depth: number,
+    name?: string,
   ): { object: PlacedObject } {
     const size = sanitizeSize(kind, width, depth);
     const obj: PlacedObject = {
       id: createId('obj'),
       kind,
-      name: defaultObjectName(kind, this.#plan),
+      name: name ?? defaultObjectName(kind, this.#plan),
       x,
       y,
       width: size.width,

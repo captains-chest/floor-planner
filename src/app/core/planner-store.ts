@@ -10,6 +10,7 @@ import {
   Viewport,
 } from '../models/floor-plan';
 import { type Hit } from './geometry';
+import { furnitureById, furnitureObjectName } from './furniture';
 import { measureImage, readFileAsDataUrl } from './image';
 import { parseProjectDocument, Persistence, serializeProject } from './persistence';
 import {
@@ -271,6 +272,31 @@ export class PlannerStore {
     this.#sync();
     this.#selection.set({ type: 'object', id: result.object.id });
     this.setTool('select');
+    return result.object;
+  }
+
+  /** Places a furniture library item, named and centered in the current view. */
+  addFurniture(itemId: string): PlacedObject | null {
+    const item = furnitureById(itemId);
+    if (!item) {
+      return null;
+    }
+    const { panX, panY, zoom } = this.#plan().viewport;
+    const centerX = panX + this.#viewSize.width / zoom / 2;
+    const centerY = panY + this.#viewSize.height / zoom / 2;
+    const name = furnitureObjectName(item, this.#plan());
+    const result = this.#edit.addObject(
+      item.kind,
+      centerX - item.width / 2,
+      centerY - item.depth / 2,
+      item.width,
+      item.depth,
+      name,
+    );
+    this.#sync();
+    this.#selection.set({ type: 'object', id: result.object.id });
+    this.setTool('select');
+    this.#status.set(`Added ${name}. Drag to move, or set its size in Properties.`);
     return result.object;
   }
 

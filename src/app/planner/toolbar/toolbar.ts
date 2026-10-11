@@ -1,5 +1,7 @@
 import { Component, inject } from '@angular/core';
+import { FURNITURE, FURNITURE_CATEGORIES } from '../../core/furniture';
 import { PlannerStore } from '../../core/planner-store';
+import { formatLength } from '../../core/units';
 
 @Component({
   selector: 'app-toolbar',
@@ -104,6 +106,18 @@ import { PlannerStore } from '../../core/planner-store';
       margin-right: 2px;
     }
 
+    .furniture {
+      background: var(--bg-panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 8px;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      max-width: 13rem;
+    }
+
     .units button {
       min-width: 2.4rem;
       padding: 6px 8px;
@@ -142,6 +156,26 @@ import { PlannerStore } from '../../core/planner-store';
         (change)="onProjectFile($event)"
       />
     </div>
+
+    <div class="split"></div>
+
+    <select
+      class="furniture"
+      aria-label="Add furniture"
+      title="Add a piece of furniture at its typical size"
+      (change)="addFurniture($event)"
+    >
+      <option value="" selected>Add furniture…</option>
+      @for (category of categories; track category) {
+        <optgroup [label]="category">
+          @for (item of itemsIn(category); track item.id) {
+            <option [value]="item.id">
+              {{ item.name }} · {{ size(item.width) }} × {{ size(item.depth) }}
+            </option>
+          }
+        </optgroup>
+      }
+    </select>
 
     <div class="grow"></div>
 
@@ -224,6 +258,23 @@ import { PlannerStore } from '../../core/planner-store';
 })
 export class Toolbar {
   protected readonly store = inject(PlannerStore);
+  protected readonly categories = FURNITURE_CATEGORIES;
+
+  protected itemsIn(category: string) {
+    return FURNITURE.filter((item) => item.category === category);
+  }
+
+  protected size(meters: number): string {
+    return formatLength(meters, this.store.lengthUnit());
+  }
+
+  protected addFurniture(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    if (select.value) {
+      this.store.addFurniture(select.value);
+    }
+    select.value = '';
+  }
 
   protected rename(event: Event): void {
     const value = (event.target as HTMLInputElement).value.trim();
