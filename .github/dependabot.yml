@@ -7,6 +7,11 @@ updates:
       day: "monday"
       time: "07:00"
       timezone: "Europe/Copenhagen"
+    # TypeScript 7 is not supported by the Angular compiler yet (build fails with
+    # "Angular compilation initialization failed"). Take it with the Angular release that adds it.
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-dependencies:
         patterns:
