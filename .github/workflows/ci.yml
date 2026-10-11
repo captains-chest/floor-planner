@@ -27,6 +27,9 @@ jobs:
           runtime: node@24
           cache: true
 
+      - name: Unit tests
+        run: pnpm test
+
       - name: Build
         run: pnpm build
 
