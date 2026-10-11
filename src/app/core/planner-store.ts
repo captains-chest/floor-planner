@@ -11,6 +11,7 @@ import {
 } from '../models/floor-plan';
 import { type Hit } from './geometry';
 import { furnitureById, furnitureObjectName, placementSpot } from './furniture';
+import { renderPlanSvg, type RenderedPlan } from './plan-export';
 import { measureImage, readFileAsDataUrl } from './image';
 import { parseProjectDocument, Persistence, serializeProject } from './persistence';
 import {
@@ -168,6 +169,14 @@ export class PlannerStore {
 
   setLengthUnit(unit: LengthUnit): void {
     this.#lengthUnit.set(unit);
+  }
+
+  /** The plan as a standalone, print-friendly SVG (for PNG export and printing). */
+  renderPlan(options?: { longSidePx?: number }): RenderedPlan {
+    return renderPlanSvg(
+      { plan: this.#plan(), imageDataUrl: this.#imageDataUrl(), lengthUnit: this.#lengthUnit() },
+      options,
+    );
   }
 
   exportProject(): { filename: string; json: string } {

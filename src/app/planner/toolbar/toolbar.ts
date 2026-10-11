@@ -1,5 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { FURNITURE, FURNITURE_CATEGORIES } from '../../core/furniture';
+import { exportFilename } from '../../core/plan-export';
+import { downloadBlob, printPlan, svgToPng } from '../../core/plan-raster';
 import { PlannerStore } from '../../core/planner-store';
 import { formatLength } from '../../core/units';
 
@@ -140,6 +142,16 @@ import { formatLength } from '../../core/units';
         title="Download the full plan, image, and scale"
       >
         Export
+      </button>
+      <button type="button" (click)="savePng()" title="Download the plan as a PNG image">
+        Save PNG
+      </button>
+      <button
+        type="button"
+        (click)="print()"
+        title="Print the plan, or choose Save as PDF in the print dialog"
+      >
+        Print / PDF
       </button>
       <button
         type="button"
@@ -304,6 +316,24 @@ export class Toolbar {
     link.click();
     URL.revokeObjectURL(url);
     this.store.setStatus('Project exported.');
+  }
+
+  protected async savePng(): Promise<void> {
+    try {
+      const blob = await svgToPng(this.store.renderPlan());
+      downloadBlob(blob, exportFilename(this.store.plan().name, 'png'));
+      this.store.setStatus('PNG saved.');
+    } catch {
+      this.store.setStatus('Could not create the PNG.');
+    }
+  }
+
+  protected async print(): Promise<void> {
+    try {
+      await printPlan(this.store.renderPlan({ longSidePx: 1400 }), this.store.plan().name);
+    } catch {
+      this.store.setStatus('Could not open the print dialog.');
+    }
   }
 
   protected async onProjectFile(event: Event): Promise<void> {
