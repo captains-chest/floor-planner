@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultPlan, FloorPlan, PlacedObject } from '../models/floor-plan';
-import { FURNITURE, FURNITURE_CATEGORIES, furnitureById, furnitureObjectName } from './furniture';
+import {
+  FURNITURE,
+  FURNITURE_CATEGORIES,
+  furnitureById,
+  furnitureObjectName,
+  placementSpot,
+} from './furniture';
 import { PlanEdit } from './plan-edit';
 
 const planWith = (...names: string[]): FloorPlan => ({
@@ -64,5 +70,16 @@ describe('furniture library', () => {
   it('keeps the default shape name when none is given', () => {
     const edit = new PlanEdit();
     expect(edit.addObject('rect', 0, 0, 1, 1).object.name).toBe('Rect 1');
+  });
+
+  it('centres a new piece, and nudges it off a piece already placed there', () => {
+    const chair = { width: 0.4, depth: 0.6 };
+    const empty = planWith();
+    expect(placementSpot(chair, { x: 2, y: 2 }, empty)).toEqual({ x: 1.8, y: 1.7 });
+    const taken = planWith('Chair');
+    taken.objects[0] = { ...taken.objects[0], x: 1.8, y: 1.7 };
+    const next = placementSpot(chair, { x: 2, y: 2 }, taken);
+    expect(next.x).toBeCloseTo(2.1);
+    expect(next.y).toBeCloseTo(2.0);
   });
 });

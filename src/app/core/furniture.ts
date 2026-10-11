@@ -149,3 +149,23 @@ export function furnitureObjectName(item: FurnitureItem, plan: FloorPlan): strin
   }
   return `${item.name} ${n}`;
 }
+
+/**
+ * Top-left for a new piece centred on `center`, nudged diagonally (0.3 m steps) while another
+ * object already starts at that spot, so repeated placements don't hide under each other.
+ */
+export function placementSpot(
+  item: Pick<FurnitureItem, 'width' | 'depth'>,
+  center: { x: number; y: number },
+  plan: FloorPlan,
+): { x: number; y: number } {
+  const step = 0.3;
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.05;
+  let x = center.x - item.width / 2;
+  let y = center.y - item.depth / 2;
+  for (let i = 0; i < 50 && plan.objects.some((obj) => near(obj.x, x) && near(obj.y, y)); i++) {
+    x += step;
+    y += step;
+  }
+  return { x, y };
+}
