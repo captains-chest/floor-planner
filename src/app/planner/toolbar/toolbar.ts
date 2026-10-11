@@ -3,6 +3,7 @@ import { PlannerStore } from '../../core/planner-store';
 
 @Component({
   selector: 'app-toolbar',
+  host: { role: 'banner' },
   styles: `
     :host {
       display: flex;
@@ -23,7 +24,9 @@ import { PlannerStore } from '../../core/planner-store';
       min-width: 140px;
     }
 
-    .brand span {
+    .brand h1 {
+      margin: 0;
+      font-weight: 400;
       font-size: 11px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -107,10 +110,10 @@ import { PlannerStore } from '../../core/planner-store';
     }
   `,
   template: `
-    <label class="brand">
-      <span>Floor planner</span>
+    <div class="brand">
+      <h1>Floor planner</h1>
       <input [value]="store.plan().name" (change)="rename($event)" aria-label="Plan name" />
-    </label>
+    </div>
 
     <div class="split"></div>
 
