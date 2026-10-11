@@ -5,5 +5,9 @@
     "directory": "./dist/floor-planner/browser",
     "not_found_handling": "single-page-application"
   },
-  "previews": {}
+  "previews": {},
+  "routes": [
+    { "pattern": "floor-planner.captains-chest.com", "custom_domain": true }
+  ],
+  "workers_dev": false
 }
