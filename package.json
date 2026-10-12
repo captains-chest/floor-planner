@@ -11,12 +11,12 @@
   "private": true,
   "packageManager": "pnpm@12.4.2",
   "dependencies": {
-    "@angular/common": "^22.2.1",
-    "@angular/compiler": "^22.2.1",
-    "@angular/core": "^22.2.1",
-    "@angular/forms": "^22.2.1",
-    "@angular/platform-browser": "^22.2.1",
-    "@angular/router": "^22.2.1",
+    "@angular/common": "^22.2.2",
+    "@angular/compiler": "^22.2.2",
+    "@angular/core": "^22.2.2",
+    "@angular/forms": "^22.2.2",
+    "@angular/platform-browser": "^22.2.2",
+    "@angular/router": "^22.2.2",
     "@captains-chest/material-symbols-rounded-icons": "^2.1.2",
     "@captains-chest/material-symbols-rounded-icons-filled": "^2.1.2",
     "rxjs": "~7.8.0",
@@ -25,7 +25,7 @@
   "devDependencies": {
     "@angular/build": "^22.2.2",
     "@angular/cli": "^22.2.2",
-    "@angular/compiler-cli": "^22.2.1",
+    "@angular/compiler-cli": "^22.2.2",
     "prettier": "^3.9.9",
     "typescript": "~6.0.2",
     "vitest": "^5.0.3"
