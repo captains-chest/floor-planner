@@ -1,8 +1,8 @@
 /** Default space between background helper lines. */
 export const DEFAULT_HELPER_SPACING_METERS = 1;
 
-/** Finest spacing the canvas will store: 1 mm. */
-export const MIN_HELPER_SPACING_METERS = 0.001;
+/** Finest stored spacing. Matches the 1 cm spinner step. */
+export const MIN_HELPER_SPACING_METERS = 0.01;
 
 /** Coarsest spacing the canvas will store. */
 export const MAX_HELPER_SPACING_METERS = 100;
@@ -11,10 +11,12 @@ export const MAX_HELPER_SPACING_METERS = 100;
 export const MAJOR_HELPER_MULTIPLE = 5;
 
 /**
- * Drawing more lines than this on one axis paints a solid band, so the
- * canvas steps by a whole multiple of the chosen spacing instead.
+ * Closer than this, helper lines paint a solid band.
+ * One centimeter at maximum zoom is 5 px, so that spacing still draws exactly.
  */
-const MAX_HELPER_LINES_PER_AXIS = 400;
+const MIN_HELPER_LINE_GAP_PX = 4;
+
+const NICE_STEP_MANTISSAS = [1, 2, 5, 10] as const;
 
 /** Keep a positive finite spacing inside the allowed range. Invalid values become the default. */
 export function normalizeHelperSpacing(value: unknown): number {
@@ -25,17 +27,33 @@ export function normalizeHelperSpacing(value: unknown): number {
 }
 
 /**
- * Step actually drawn across `spanMeters`. It is the chosen spacing, or a
- * whole multiple of it when that spacing would draw too many lines.
+ * Step drawn at `zoom` pixels per meter.
+ * A spacing closer than the minimum gap moves up to the next 1-2-5 multiple
+ * so zooming thins the grid instead of landing on odd intervals.
  */
-export function drawnHelperStep(spacingMeters: number, spanMeters: number): number {
+export function drawnHelperStep(spacingMeters: number, zoom: number): number {
   const spacing = normalizeHelperSpacing(spacingMeters);
-  if (!(spanMeters > 0)) {
+  if (!(zoom > 0)) {
     return spacing;
   }
-  const lineCount = spanMeters / spacing;
-  if (lineCount <= MAX_HELPER_LINES_PER_AXIS) {
+  const gapPx = spacing * zoom;
+  if (gapPx >= MIN_HELPER_LINE_GAP_PX) {
     return spacing;
   }
-  return spacing * Math.ceil(lineCount / MAX_HELPER_LINES_PER_AXIS);
+  return spacing * niceMultiplier(MIN_HELPER_LINE_GAP_PX / gapPx);
+}
+
+function niceMultiplier(needed: number): number {
+  if (!(needed > 1)) {
+    return 1;
+  }
+  const exponent = Math.floor(Math.log10(needed));
+  const scale = 10 ** exponent;
+  const mantissa = needed / scale;
+  for (const step of NICE_STEP_MANTISSAS) {
+    if (mantissa <= step * (1 + 1e-9)) {
+      return step * scale;
+    }
+  }
+  return 10 * scale;
 }

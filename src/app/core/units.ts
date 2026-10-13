@@ -32,6 +32,17 @@ export function formatDisplayNumber(meters: number, unit: LengthUnit): string {
   return String(Math.round(value * 1000) / 1000);
 }
 
+/** Round to the precision `formatDisplayNumber` shows: 0.1 cm or 0.001 m. */
+export function roundMetersForDisplay(meters: number, unit: LengthUnit): number {
+  if (!Number.isFinite(meters)) {
+    return meters;
+  }
+  const display = metersToDisplay(meters, unit);
+  const factor = unit === 'cm' ? 10 : 1000;
+  const rounded = Math.round(display * factor) / factor;
+  return displayToMeters(rounded, unit);
+}
+
 export function inputStep(unit: LengthUnit): number {
   return unit === 'cm' ? 1 : 0.01;
 }

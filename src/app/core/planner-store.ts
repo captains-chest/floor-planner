@@ -14,7 +14,13 @@ import { furnitureById, furnitureObjectName, placementSpot } from './furniture';
 import { renderPlanSvg, type RenderedPlan } from './plan-export';
 import { measureImage, readFileAsDataUrl } from './image';
 import { parseProjectDocument, Persistence, serializeProject } from './persistence';
-import { ObjectPose, PlanEdit, PlanEditResult, PlanNotice, StackDirection } from './plan-edit';
+import {
+  ObjectPose,
+  PlanEdit,
+  PlanEditResult,
+  PlanNotice,
+  StackDirection,
+} from './plan-edit';
 import {
   BoxPick,
   collectBoxSelection,
@@ -170,7 +176,7 @@ export class PlannerStore {
     this.#lengthUnit.set(unit);
   }
 
-  /** Set the space between background helper lines. Stored in meters; the toolbar shows the current unit. */
+  /** Set the helper-line spacing, in meters. */
   setGridSpacing(meters: number): void {
     this.#gridSpacingMeters.set(normalizeHelperSpacing(meters));
   }
@@ -362,9 +368,7 @@ export class PlannerStore {
     this.#sync();
     if ('measurement' in result) {
       this.#selection.set({ type: 'measurement', id: result.measurement.id });
-      this.#status.set(
-        `Measured ${formatLength(Math.hypot(end.x - start.x, end.y - start.y), this.#lengthUnit())}`,
-      );
+      this.#status.set(`Measured ${formatLength(Math.hypot(end.x - start.x, end.y - start.y), this.#lengthUnit())}`);
       return result.measurement;
     }
     this.#applyNotice(result.notice);
