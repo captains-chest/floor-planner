@@ -306,6 +306,7 @@ export class Planner {
 
     if (event.key === 'Escape') {
       this.canvas()?.cancelDraft();
+      this.store.cancelScale();
       this.store.clearSelection();
       this.store.setStatus('Cancelled');
       return;

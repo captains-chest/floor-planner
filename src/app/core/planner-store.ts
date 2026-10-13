@@ -259,6 +259,25 @@ export class PlannerStore {
     this.setTool('scale');
   }
 
+  /** Starts the one-time scale step: mark a known length on the image. Needs an image. */
+  startScale(): boolean {
+    if (!this.#plan().background) {
+      this.#status.set('Import an image first, then set its scale.');
+      return false;
+    }
+    this.#scaleDialog.set(null);
+    this.setTool('scale');
+    return true;
+  }
+
+  /** Leaves the scale step without changing the scale. */
+  cancelScale(): void {
+    this.#scaleDialog.set(null);
+    if (this.#tool() === 'scale') {
+      this.setTool('select');
+    }
+  }
+
   openScaleDialog(p1: Point, p2: Point): void {
     this.#scaleDialog.set({ p1, p2, measured: Math.hypot(p2.x - p1.x, p2.y - p1.y) });
   }

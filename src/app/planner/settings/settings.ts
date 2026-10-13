@@ -28,6 +28,7 @@ import {
   metersToDisplay,
   roundMetersForDisplay,
 } from '../../core/units';
+import { scaleStatus } from '../../core/scale-status';
 import { SettingsAction } from './settings-action/settings-action';
 
 /** Longest side of the print image, in CSS pixels. */
@@ -106,6 +107,17 @@ export class Settings {
       run: () => void this.#print(),
     },
   ];
+
+  protected readonly _scaleStatus = computed(() =>
+    scaleStatus(this.store.plan().background, this.store.lengthUnit()),
+  );
+
+  /** Closes Settings and lets the user mark a known length on the image. */
+  protected _setScale(): void {
+    if (this.store.startScale()) {
+      this._close();
+    }
+  }
 
   protected _open(): void {
     const dialog = this.dialog().nativeElement;

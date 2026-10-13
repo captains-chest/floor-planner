@@ -134,6 +134,7 @@ h3 {
 }
 
 .units button,
+.scale-button,
 .grid-control input {
   background: var(--bg-panel-2);
   color: var(--text);
@@ -143,7 +144,8 @@ h3 {
   font-size: 13px;
 }
 
-.units button {
+.units button,
+.scale-button {
   padding: 8px 10px;
   cursor: pointer;
 }
@@ -181,4 +183,14 @@ h3 {
   font-size: 12px;
   line-height: 1.4;
   color: var(--text);
+}
+
+.scale-button {
+  align-self: flex-start;
+  cursor: pointer;
+}
+
+.scale-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }

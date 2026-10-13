@@ -85,6 +85,24 @@
       </div>
     </section>
 
+    <section aria-labelledby="plan-settings-scale">
+      <h3 id="plan-settings-scale">Scale</h3>
+      <div class="fields">
+        <div class="field">
+          <p class="hint" id="plan-settings-scale-status">{{ _scaleStatus() }}</p>
+          <button
+            type="button"
+            class="scale-button"
+            aria-describedby="plan-settings-scale-status"
+            [disabled]="!store.plan().background"
+            (click)="_setScale()"
+          >
+            {{ store.plan().background?.calibrated ? 'Set scale again' : 'Set scale' }}
+          </button>
+        </div>
+      </div>
+    </section>
+
     <section aria-labelledby="plan-settings-files">
       <h3 id="plan-settings-files">Files</h3>
       <div class="actions">

@@ -123,6 +123,47 @@ type DragState =
       backdrop-filter: blur(8px);
     }
 
+    .chip-action {
+      pointer-events: auto;
+      cursor: pointer;
+      color: var(--accent);
+      font: inherit;
+    }
+
+    .scale-banner {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: min(40rem, calc(100% - 24px));
+      box-sizing: border-box;
+      padding: 8px 8px 8px 14px;
+      background: var(--bg-panel);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .scale-banner p {
+      margin: 0;
+    }
+
+    .scale-banner button {
+      flex: none;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font: inherit;
+    }
+
     .empty {
       position: absolute;
       inset: 0;
@@ -580,10 +621,22 @@ type DragState =
         <div>
           <h2>Import a floor plan image</h2>
           <p>
-            Drop an image onto the canvas, then use Scale and mark a known length so everything is
-            in real-world units.
+            Drop an image onto the canvas, then mark a known length to set its scale so everything
+            is in real-world units. You can redo the scale later in Settings.
           </p>
         </div>
+      </div>
+    }
+
+    @if (store.tool() === 'scale') {
+      <div class="scale-banner" role="region" aria-label="Set scale">
+        <p>
+          <strong>Set the scale:</strong> click both ends of a length you know, then type it. Alt
+          locks to 90°, Shift turns snap off.
+        </p>
+        <button type="button" (click)="store.cancelScale()">
+          {{ store.plan().background?.calibrated ? 'Cancel' : 'Skip for now' }}
+        </button>
       </div>
     }
 
@@ -594,7 +647,13 @@ type DragState =
       </div>
       <div class="hud-group">
         <span class="chip">{{ zoomLabel() }}</span>
-        <span class="chip">{{ scaleLabel() }}</span>
+        @if (store.plan().background?.calibrated === false && store.tool() !== 'scale') {
+          <button type="button" class="chip chip-action" (click)="store.startScale()">
+            Not calibrated · Set scale
+          </button>
+        } @else {
+          <span class="chip">{{ scaleLabel() }}</span>
+        }
       </div>
     </div>
   `,
