@@ -1,0 +1,115 @@
+<button
+  type="button"
+  class="trigger"
+  aria-haspopup="dialog"
+  aria-controls="plan-settings"
+  [attr.aria-expanded]="_opened()"
+  (click)="_open()"
+>
+  @if (_opened()) {
+    <msrf-settings-icon />
+  } @else {
+    <msr-settings-icon />
+  }
+  Settings
+</button>
+
+<dialog
+  #dialog
+  id="plan-settings"
+  aria-labelledby="plan-settings-title"
+  (click)="_onDialogClick($event)"
+  (keydown)="_onDialogKeyDown($event)"
+  (close)="_onDialogClose()"
+>
+  <div class="panel">
+    <header>
+      <h2 id="plan-settings-title">Settings</h2>
+      <button type="button" class="close" aria-label="Close settings" (click)="_close()">
+        <msr-close-icon />
+      </button>
+    </header>
+
+    <section aria-labelledby="plan-settings-plan">
+      <h3 id="plan-settings-plan">Plan</h3>
+      <div class="fields">
+        <div class="field">
+          <span class="field-label" id="plan-settings-units">Units</span>
+          <div
+            class="units"
+            role="group"
+            aria-labelledby="plan-settings-units"
+            aria-describedby="plan-settings-units-hint"
+          >
+            <button
+              type="button"
+              [class.active]="store.lengthUnit() === 'm'"
+              [attr.aria-pressed]="store.lengthUnit() === 'm'"
+              (click)="store.setLengthUnit('m')"
+            >
+              Meters
+            </button>
+            <button
+              type="button"
+              [class.active]="store.lengthUnit() === 'cm'"
+              [attr.aria-pressed]="store.lengthUnit() === 'cm'"
+              (click)="store.setLengthUnit('cm')"
+            >
+              Centimeters
+            </button>
+          </div>
+          <p class="hint" id="plan-settings-units-hint">Lengths and the grid use this unit.</p>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="plan-settings-grid">Grid size</label>
+          <span class="grid-control">
+            <input
+              id="plan-settings-grid"
+              type="number"
+              title="Space between background helper lines. Uses the current unit. Press Enter to apply."
+              autocomplete="off"
+              aria-describedby="plan-settings-grid-hint"
+              [min]="_gridInputStep()"
+              [max]="_gridMax()"
+              [step]="_gridInputStep()"
+              [value]="_gridDisplay()"
+              (change)="_setGridSpacing($event)"
+            />
+            <span class="suffix">{{ store.lengthUnit() }}</span>
+          </span>
+          <span class="hint" id="plan-settings-grid-hint"
+            >Space between helper lines. Press Enter to apply.</span
+          >
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="plan-settings-files">
+      <h3 id="plan-settings-files">Files</h3>
+      <div class="actions">
+        @for (action of _fileActions; track action.id) {
+          <button
+            app-settings-action
+            [label]="action.label"
+            [detail]="action.detail"
+            [icon]="action.icon"
+            (click)="action.run()"
+          ></button>
+        }
+      </div>
+      <input #imageInput type="file" accept="image/*" hidden (change)="_onImage($event)" />
+      <input
+        #projectInput
+        type="file"
+        accept=".json,application/json"
+        hidden
+        (change)="_onProject($event)"
+      />
+    </section>
+
+    @if (_notice(); as notice) {
+      <p class="notice" role="status">{{ notice }}</p>
+    }
+  </div>
+</dialog>
