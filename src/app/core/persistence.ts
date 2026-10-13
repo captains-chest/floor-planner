@@ -6,12 +6,15 @@ import {
   ObjectGroup,
   PlacedObject,
 } from '../models/floor-plan';
+import { normalizeHelperSpacing } from './helper-grid';
 import { isLengthUnit, type LengthUnit } from './units';
 
 export interface PersistedState {
   plan: FloorPlan;
   imageDataUrl: string | null;
   lengthUnit: LengthUnit;
+  /** Space between background helper lines, in meters. */
+  gridSpacingMeters: number;
 }
 
 const DB_NAME = 'floor-planner';
@@ -96,6 +99,7 @@ export function serializeProject(state: PersistedState): ProjectDocument {
     plan: state.plan,
     imageDataUrl: state.imageDataUrl,
     lengthUnit: state.lengthUnit,
+    gridSpacingMeters: state.gridSpacingMeters,
   };
 }
 
@@ -117,11 +121,21 @@ function normalizeState(raw: unknown): PersistedState | null {
   if (!raw || typeof raw !== 'object') {
     return null;
   }
-  const record = raw as { plan?: unknown; imageDataUrl?: unknown; lengthUnit?: unknown };
+  const record = raw as {
+    plan?: unknown;
+    imageDataUrl?: unknown;
+    lengthUnit?: unknown;
+    gridSpacingMeters?: unknown;
+  };
   const plan = normalizePlan(record.plan);
   const imageDataUrl = typeof record.imageDataUrl === 'string' ? record.imageDataUrl : null;
   const lengthUnit: LengthUnit = isLengthUnit(record.lengthUnit) ? record.lengthUnit : 'm';
-  return { plan, imageDataUrl, lengthUnit };
+  return {
+    plan,
+    imageDataUrl,
+    lengthUnit,
+    gridSpacingMeters: normalizeHelperSpacing(record.gridSpacingMeters),
+  };
 }
 
 function normalizePlan(raw: unknown): FloorPlan {
@@ -207,7 +221,10 @@ function normalizeObject(raw: unknown): PlacedObject | null {
   if (typeof value.id !== 'string') {
     return null;
   }
-  const kind = value.kind === 'circle' || value.kind === 'ellipse' || value.kind === 'rect' ? value.kind : 'rect';
+  const kind =
+    value.kind === 'circle' || value.kind === 'ellipse' || value.kind === 'rect'
+      ? value.kind
+      : 'rect';
   return {
     id: value.id,
     kind,

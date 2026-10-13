@@ -1,9 +1,16 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { FURNITURE, FURNITURE_CATEGORIES } from '../../core/furniture';
 import { exportFilename } from '../../core/plan-export';
 import { downloadBlob, printPlan, svgToPng } from '../../core/plan-raster';
+import { MAX_HELPER_SPACING_METERS } from '../../core/helper-grid';
 import { PlannerStore } from '../../core/planner-store';
-import { formatLength } from '../../core/units';
+import {
+  displayToMeters,
+  formatDisplayNumber,
+  formatLength,
+  inputStep,
+  metersToDisplay,
+} from '../../core/units';
 
 @Component({
   selector: 'app-toolbar',
@@ -124,6 +131,37 @@ import { formatLength } from '../../core/units';
       min-width: 2.4rem;
       padding: 6px 8px;
     }
+
+    .grid-spacing {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .grid-spacing span {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+
+    .grid-spacing input {
+      width: 4.6rem;
+      background: var(--bg-panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 8px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .grid-spacing .suffix {
+      font-size: 13px;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--text);
+    }
   `,
   template: `
     <div class="brand">
@@ -211,6 +249,21 @@ import { formatLength } from '../../core/units';
       </button>
     </div>
 
+    <label class="grid-spacing">
+      <span>Grid size</span>
+      <input
+        type="number"
+        aria-label="Grid size"
+        title="Space between background helper lines. Uses the current unit. Press Enter to apply."
+        [min]="gridInputStep()"
+        [max]="gridMax()"
+        [step]="gridInputStep()"
+        [value]="gridDisplay()"
+        (change)="setGridSpacing($event)"
+      />
+      <span class="suffix">{{ store.lengthUnit() }}</span>
+    </label>
+
     <div class="split"></div>
 
     <div class="group">
@@ -271,6 +324,28 @@ import { formatLength } from '../../core/units';
 export class Toolbar {
   protected readonly store = inject(PlannerStore);
   protected readonly categories = FURNITURE_CATEGORIES;
+  protected readonly gridDisplay = computed(() =>
+    formatDisplayNumber(this.store.gridSpacingMeters(), this.store.lengthUnit()),
+  );
+  /**
+   * Same as the step, so the spinner counts 1, 0.99, 0.98 in meters.
+   * A 1 mm minimum shifts that series and turns 1 into 0.991.
+   */
+  protected readonly gridInputStep = computed(() => inputStep(this.store.lengthUnit()));
+  protected readonly gridMax = computed(() =>
+    metersToDisplay(MAX_HELPER_SPACING_METERS, this.store.lengthUnit()),
+  );
+
+  protected setGridSpacing(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const meters = displayToMeters(Number(input.value), this.store.lengthUnit());
+    if (!Number.isFinite(meters) || meters <= 0) {
+      input.value = this.gridDisplay();
+      return;
+    }
+    this.store.setGridSpacing(meters);
+    input.value = this.gridDisplay();
+  }
 
   protected itemsIn(category: string) {
     return FURNITURE.filter((item) => item.category === category);

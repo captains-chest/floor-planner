@@ -33,5 +33,9 @@ _Avoid_: zoom (that is viewport)
 **Viewport**:
 Pan and zoom onto the floor plan. Saved with the floor plan.
 
+**Helper lines**:
+The background grid on the floor plan. The space between lines is a length in the chosen unit.
+_Avoid_: guides, rulers
+
 **Clipboard**:
 The objects (and their groups) last copied, waiting to be pasted.

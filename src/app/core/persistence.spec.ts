@@ -58,6 +58,7 @@ describe('parseProjectDocument', () => {
     expect(parsed?.plan).not.toHaveProperty('activeLayerId');
     expect(parsed?.plan).not.toHaveProperty('rooms');
     expect(parsed?.plan.measurements).toEqual([]);
+    expect(parsed?.gridSpacingMeters).toBe(1);
     expect(parsed?.plan.objects).toEqual([
       {
         id: 'o1',
@@ -114,5 +115,41 @@ describe('parseProjectDocument', () => {
         offset: 0,
       },
     ]);
+  });
+
+  it('keeps helper-line spacing in meters and replaces an unusable value', () => {
+    const kept = parseProjectDocument({
+      kind: PROJECT_KIND,
+      formatVersion: 1,
+      lengthUnit: 'cm',
+      gridSpacingMeters: 0.5,
+      plan: {
+        version: 1,
+        name: 'Spaced',
+        background: null,
+        objects: [],
+        measurements: [],
+        groups: [],
+        viewport: { panX: 0, panY: 0, zoom: 40 },
+      },
+    });
+    const replaced = parseProjectDocument({
+      kind: PROJECT_KIND,
+      formatVersion: 1,
+      gridSpacingMeters: 0,
+      plan: {
+        version: 1,
+        name: 'Spaced',
+        background: null,
+        objects: [],
+        measurements: [],
+        groups: [],
+        viewport: { panX: 0, panY: 0, zoom: 40 },
+      },
+    });
+
+    expect(kept?.lengthUnit).toBe('cm');
+    expect(kept?.gridSpacingMeters).toBe(0.5);
+    expect(replaced?.gridSpacingMeters).toBe(1);
   });
 });

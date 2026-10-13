@@ -38,6 +38,7 @@ import {
   snapToGeometry,
   snapToRightAngle,
 } from '../../core/geometry';
+import { drawnHelperStep, MAJOR_HELPER_MULTIPLE } from '../../core/helper-grid';
 import { PlannerStore } from '../../core/planner-store';
 import { formatLength, metersToDisplay } from '../../core/units';
 
@@ -460,8 +461,18 @@ type DragState =
             stroke-width="2"
             vector-effect="non-scaling-stroke"
           />
-          <circle [attr.cx]="preview.start.x" [attr.cy]="preview.start.y" [attr.r]="handleSize() * 0.45" fill="var(--snap)" />
-          <circle [attr.cx]="preview.end.x" [attr.cy]="preview.end.y" [attr.r]="handleSize() * 0.45" fill="var(--snap)" />
+          <circle
+            [attr.cx]="preview.start.x"
+            [attr.cy]="preview.start.y"
+            [attr.r]="handleSize() * 0.45"
+            fill="var(--snap)"
+          />
+          <circle
+            [attr.cx]="preview.end.x"
+            [attr.cy]="preview.end.y"
+            [attr.r]="handleSize() * 0.45"
+            fill="var(--snap)"
+          />
           <text
             [attr.x]="preview.mid.x"
             [attr.y]="preview.mid.y - labelSize()"
@@ -568,8 +579,8 @@ type DragState =
         <div>
           <h2>Import a floor plan image</h2>
           <p>
-            Drop an image onto the canvas, then use Scale and mark a known length so
-            everything is in real-world units.
+            Drop an image onto the canvas, then use Scale and mark a known length so everything is
+            in real-world units.
           </p>
         </div>
       </div>
@@ -630,8 +641,8 @@ export class Canvas {
     const { width, height } = this.viewportSize();
     const worldW = width / zoom;
     const worldH = height / zoom;
-    const minorStep = pickGridStep(zoom);
-    const majorStep = minorStep * (minorStep < 1 ? 4 : 5);
+    const minorStep = drawnHelperStep(this.store.gridSpacingMeters(), Math.max(worldW, worldH));
+    const majorStep = minorStep * MAJOR_HELPER_MULTIPLE;
     return {
       left: panX,
       top: panY,
@@ -992,11 +1003,7 @@ export class Canvas {
         this.scaleP1.set({ ...snapped.point });
         this.store.setStatus('Click the other end of the known length · hold Alt for 90°');
       } else {
-        const end = this.constrainOrthoPoint(
-          p1,
-          snapped.point,
-          event.altKey || this.altHeld(),
-        );
+        const end = this.constrainOrthoPoint(p1, snapped.point, event.altKey || this.altHeld());
         this.store.openScaleDialog(p1, end);
         this.scaleP1.set(null);
       }
@@ -1061,9 +1068,11 @@ export class Canvas {
         }
         const box = itemsBBox(targets);
         const center =
-          targets.length === 1 ? objectCenter(targets[0]) : box
-            ? { x: box.x + box.width / 2, y: box.y + box.depth / 2 }
-            : objectCenter(targets[0]);
+          targets.length === 1
+            ? objectCenter(targets[0])
+            : box
+              ? { x: box.x + box.width / 2, y: box.y + box.depth / 2 }
+              : objectCenter(targets[0]);
         this.drag.set({
           type: 'rotate-objects',
           orig: targets.map((obj) => ({
@@ -1237,11 +1246,7 @@ export class Canvas {
       }
       const measuredPoint = linePointToMeasured(measurement, snapped.point);
       const origin = drag.end === 'start' ? measurement.end : measurement.start;
-      const point = this.constrainOrthoPoint(
-        origin,
-        measuredPoint,
-        event.altKey || this.altHeld(),
-      );
+      const point = this.constrainOrthoPoint(origin, measuredPoint, event.altKey || this.altHeld());
       if (drag.end === 'start') {
         this.store.updateMeasurement(drag.id, { start: { ...point } });
       } else {
@@ -1316,9 +1321,7 @@ export class Canvas {
     const tool = this.store.tool();
     const drag = this.drag();
     const wantsSnap =
-      tool === 'scale' ||
-      tool === 'measure' ||
-      drag.type === 'move-measurement-end';
+      tool === 'scale' || tool === 'measure' || drag.type === 'move-measurement-end';
     const shift = event.shiftKey || this.shiftHeld();
     const zoom = this.store.plan().viewport.zoom;
     const enabled = wantsSnap && !shift;
@@ -1339,12 +1342,6 @@ export class Canvas {
     const rect = this.viewport().nativeElement.getBoundingClientRect();
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
-}
-
-function pickGridStep(zoom: number): number {
-  const targetMeters = 48 / zoom;
-  const steps = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50];
-  return steps.find((step) => step >= targetMeters) ?? 50;
 }
 
 function axisLines(
