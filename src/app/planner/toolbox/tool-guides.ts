@@ -1,7 +1,6 @@
-import type { Tool } from '../../models/floor-plan';
-import type { ToolGroup, ToolGuide } from './models';
+import type { ToolbarTool, ToolGroup, ToolGuide } from './models';
 
-const guide = (id: Tool, body: Omit<ToolGuide, 'id'>): ToolGuide => ({ id, ...body });
+const guide = (id: ToolbarTool, body: Omit<ToolGuide, 'id'>): ToolGuide => ({ id, ...body });
 
 /** Shown text and the key that selects the tool. Planner key handling reads this same list. */
 export const TOOL_GUIDES = {
@@ -20,15 +19,6 @@ export const TOOL_GUIDES = {
     shortcut: 'H',
     summary: 'Drag the plan. Scroll to zoom.',
     tips: [{ keys: ['Space'], text: 'pans from any tool' }],
-  }),
-  scale: guide('scale', {
-    label: 'Scale',
-    shortcut: 'S',
-    summary: 'Click both ends of a known length, then type it.',
-    tips: [
-      { keys: ['Alt', '⌥'], text: 'locks to 90°' },
-      { keys: ['Shift'], text: 'turns snap off' },
-    ],
   }),
   measure: guide('measure', {
     label: 'Measure',
@@ -57,17 +47,17 @@ export const TOOL_GUIDES = {
     summary: 'Drag to draw an ellipse.',
     tips: [],
   }),
-} as const satisfies Record<Tool, ToolGuide>;
+} as const satisfies Record<ToolbarTool, ToolGuide>;
 
 export const TOOL_GROUPS: readonly ToolGroup[] = [
   { name: 'Navigate', tools: [TOOL_GUIDES.select, TOOL_GUIDES.pan] },
-  { name: 'Measure', tools: [TOOL_GUIDES.scale, TOOL_GUIDES.measure] },
+  { name: 'Measure', tools: [TOOL_GUIDES.measure] },
   { name: 'Objects', tools: [TOOL_GUIDES.rect, TOOL_GUIDES.circle, TOOL_GUIDES.ellipse] },
 ];
 
 const TOOL_GUIDE_LIST: readonly ToolGuide[] = Object.values(TOOL_GUIDES);
 
-export function toolForShortcut(key: string): Tool | null {
+export function toolForShortcut(key: string): ToolbarTool | null {
   const normalized = key.toLowerCase();
   return TOOL_GUIDE_LIST.find((item) => item.shortcut.toLowerCase() === normalized)?.id ?? null;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Tool } from '../../models/floor-plan';
+import type { ToolbarTool } from './models';
 import { TOOL_GROUPS, TOOL_GUIDES, toolForShortcut } from './tool-guides';
 
 const tools = TOOL_GROUPS.flatMap((group) => group.tools);
@@ -20,20 +20,21 @@ describe('tool guides', () => {
   });
 
   it('uses the same shortcut the keyboard uses to pick the tool', () => {
-    const keys: Record<Tool, string> = {
+    const keys: Record<ToolbarTool, string> = {
       select: 'v',
       pan: 'h',
-      scale: 's',
       measure: 'm',
       rect: 'r',
       circle: 'c',
       ellipse: 'e',
     };
-    for (const id of Object.keys(keys) as Tool[]) {
+    for (const id of Object.keys(keys) as ToolbarTool[]) {
       expect(toolForShortcut(keys[id])).toBe(id);
       expect(toolForShortcut(keys[id].toUpperCase())).toBe(id);
     }
     expect(toolForShortcut('x')).toBeNull();
+    // Scale moved to Settings: it is a one-time step, not a toolbox tool.
+    expect(toolForShortcut('s')).toBeNull();
     expect(toolForShortcut('')).toBeNull();
   });
 });

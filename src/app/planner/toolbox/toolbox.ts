@@ -15,7 +15,6 @@ import {
   MsrCircleIconComponent,
   MsrPanToolAltIconComponent,
   MsrRectangleIconComponent,
-  MsrSquareFootIconComponent,
   MsrStadiumIconComponent,
   MsrStraightenIconComponent,
 } from '@captains-chest/material-symbols-rounded-icons';
@@ -24,12 +23,10 @@ import {
   MsrfCircleIconComponent,
   MsrfPanToolAltIconComponent,
   MsrfRectangleIconComponent,
-  MsrfSquareFootIconComponent,
   MsrfStadiumIconComponent,
   MsrfStraightenIconComponent,
 } from '@captains-chest/material-symbols-rounded-icons-filled';
 import { PlannerStore } from '../../core/planner-store';
-import type { Tool } from '../../models/floor-plan';
 import {
   TOOL_PREVIEW_CLOSE_DELAY_MS,
   TOOL_PREVIEW_GAP_PX,
@@ -38,7 +35,7 @@ import {
   TOOL_PREVIEW_WIDTH_PX,
 } from './constants';
 import { boundsFromRect, placeToolPreview, type ToolPreviewPlacement } from './functions';
-import type { ToolGuide } from './models';
+import type { ToolbarTool, ToolGuide } from './models';
 import { TOOL_GROUPS } from './tool-guides';
 import { ToolPreview } from './tool-preview/tool-preview';
 
@@ -52,10 +49,6 @@ const TOOL_ICONS = {
   pan: {
     icon: MsrPanToolAltIconComponent,
     activeIcon: MsrfPanToolAltIconComponent,
-  },
-  scale: {
-    icon: MsrSquareFootIconComponent,
-    activeIcon: MsrfSquareFootIconComponent,
   },
   measure: {
     icon: MsrStraightenIconComponent,
@@ -73,7 +66,7 @@ const TOOL_ICONS = {
     icon: MsrStadiumIconComponent,
     activeIcon: MsrfStadiumIconComponent,
   },
-} as const satisfies Record<Tool, { icon: Type<unknown>; activeIcon: Type<unknown> }>;
+} as const satisfies Record<ToolbarTool, { icon: Type<unknown>; activeIcon: Type<unknown> }>;
 
 @Component({
   selector: 'app-toolbox',
