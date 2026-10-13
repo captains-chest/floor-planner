@@ -1,20 +1,12 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { FURNITURE, FURNITURE_CATEGORIES } from '../../core/furniture';
-import { exportFilename } from '../../core/plan-export';
-import { downloadBlob, printPlan, svgToPng } from '../../core/plan-raster';
-import { MAX_HELPER_SPACING_METERS } from '../../core/helper-grid';
+import { formatLength } from '../../core/units';
 import { PlannerStore } from '../../core/planner-store';
-import {
-  displayToMeters,
-  formatDisplayNumber,
-  formatLength,
-  inputStep,
-  metersToDisplay,
-  roundMetersForDisplay,
-} from '../../core/units';
+import { Settings } from '../settings/settings';
 
 @Component({
   selector: 'app-toolbar',
+  imports: [Settings],
   host: { role: 'banner' },
   styles: `
     :host {
@@ -102,20 +94,6 @@ import {
       flex: 1;
     }
 
-    .units {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .units span {
-      font-size: 11px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-      margin-right: 2px;
-    }
-
     .furniture {
       background: var(--bg-panel-2);
       color: var(--text);
@@ -127,85 +105,11 @@ import {
       cursor: pointer;
       max-width: 13rem;
     }
-
-    .units button {
-      min-width: 2.4rem;
-      padding: 6px 8px;
-    }
-
-    .grid-spacing {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .grid-spacing span {
-      font-size: 11px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-    }
-
-    .grid-spacing input {
-      width: 4.6rem;
-      background: var(--bg-panel-2);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 6px 8px;
-      font: inherit;
-      font-size: 13px;
-    }
-
-    .grid-spacing .suffix {
-      font-size: 13px;
-      letter-spacing: 0;
-      text-transform: none;
-      color: var(--text);
-    }
   `,
   template: `
     <div class="brand">
       <h1>Floor planner</h1>
       <input [value]="store.plan().name" (change)="rename($event)" aria-label="Plan name" />
-    </div>
-
-    <div class="split"></div>
-
-    <div class="group">
-      <button type="button" (click)="fileInput.click()">Import image</button>
-      <input #fileInput type="file" accept="image/*" hidden (change)="onFile($event)" />
-      <button
-        type="button"
-        (click)="exportProject()"
-        title="Download the full plan, image, and scale"
-      >
-        Export
-      </button>
-      <button type="button" (click)="savePng()" title="Download the plan as a PNG image">
-        Save PNG
-      </button>
-      <button
-        type="button"
-        (click)="print()"
-        title="Print the plan, or choose Save as PDF in the print dialog"
-      >
-        Print / PDF
-      </button>
-      <button
-        type="button"
-        (click)="projectInput.click()"
-        title="Open a previously exported project"
-      >
-        Import project
-      </button>
-      <input
-        #projectInput
-        type="file"
-        accept=".json,application/json"
-        hidden
-        (change)="onProjectFile($event)"
-      />
     </div>
 
     <div class="split"></div>
@@ -230,40 +134,7 @@ import {
 
     <div class="grow"></div>
 
-    <div class="units" role="group" aria-label="Length unit">
-      <span>Units</span>
-      <button
-        type="button"
-        [class.active]="store.lengthUnit() === 'm'"
-        [attr.aria-pressed]="store.lengthUnit() === 'm'"
-        (click)="store.setLengthUnit('m')"
-      >
-        m
-      </button>
-      <button
-        type="button"
-        [class.active]="store.lengthUnit() === 'cm'"
-        [attr.aria-pressed]="store.lengthUnit() === 'cm'"
-        (click)="store.setLengthUnit('cm')"
-      >
-        cm
-      </button>
-    </div>
-
-    <label class="grid-spacing">
-      <span>Grid size</span>
-      <input
-        type="number"
-        aria-label="Grid size"
-        title="Space between background helper lines. Uses the current unit. Press Enter to apply."
-        [min]="gridInputStep()"
-        [max]="gridMax()"
-        [step]="gridInputStep()"
-        [value]="gridDisplay()"
-        (change)="setGridSpacing($event)"
-      />
-      <span class="suffix">{{ store.lengthUnit() }}</span>
-    </label>
+    <app-settings />
 
     <div class="split"></div>
 
@@ -325,27 +196,6 @@ import {
 export class Toolbar {
   protected readonly store = inject(PlannerStore);
   protected readonly categories = FURNITURE_CATEGORIES;
-  protected readonly gridDisplay = computed(() =>
-    formatDisplayNumber(this.store.gridSpacingMeters(), this.store.lengthUnit()),
-  );
-  /** Field minimum matches this step, so the spinner stays on the displayed series. */
-  protected readonly gridInputStep = computed(() => inputStep(this.store.lengthUnit()));
-  protected readonly gridMax = computed(() =>
-    metersToDisplay(MAX_HELPER_SPACING_METERS, this.store.lengthUnit()),
-  );
-
-  protected setGridSpacing(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const unit = this.store.lengthUnit();
-    const typed = displayToMeters(Number(input.value), unit);
-    const meters = roundMetersForDisplay(typed, unit);
-    if (!Number.isFinite(meters) || meters <= 0) {
-      input.value = this.gridDisplay();
-      return;
-    }
-    this.store.setGridSpacing(meters);
-    input.value = this.gridDisplay();
-  }
 
   protected itemsIn(category: string) {
     return FURNITURE.filter((item) => item.category === category);
@@ -366,61 +216,5 @@ export class Toolbar {
   protected rename(event: Event): void {
     const value = (event.target as HTMLInputElement).value.trim();
     this.store.setName(value || 'Floor plan');
-  }
-
-  protected async onFile(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.item(0);
-    if (file) {
-      try {
-        await this.store.importImageFile(file);
-      } catch {
-        this.store.setStatus('Could not import that image.');
-      }
-    }
-    input.value = '';
-  }
-
-  protected exportProject(): void {
-    const { filename, json } = this.store.exportProject();
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.click();
-    URL.revokeObjectURL(url);
-    this.store.setStatus('Project exported.');
-  }
-
-  protected async savePng(): Promise<void> {
-    try {
-      const blob = await svgToPng(this.store.renderPlan());
-      downloadBlob(blob, exportFilename(this.store.plan().name, 'png'));
-      this.store.setStatus('PNG saved.');
-    } catch {
-      this.store.setStatus('Could not create the PNG.');
-    }
-  }
-
-  protected async print(): Promise<void> {
-    try {
-      await printPlan(this.store.renderPlan({ longSidePx: 1400 }), this.store.plan().name);
-    } catch {
-      this.store.setStatus('Could not open the print dialog.');
-    }
-  }
-
-  protected async onProjectFile(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.item(0);
-    if (file) {
-      try {
-        await this.store.importProjectFile(file);
-      } catch {
-        this.store.setStatus('Could not import that project file.');
-      }
-    }
-    input.value = '';
   }
 }

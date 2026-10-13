@@ -1,0 +1,184 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.trigger[aria-expanded='true'] {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-panel-2));
+  border-color: var(--accent);
+}
+
+.trigger msr-settings-icon,
+.trigger msrf-settings-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+dialog {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  max-width: calc(100% - 32px);
+}
+
+dialog::backdrop {
+  background: color-mix(in srgb, #000 45%, transparent);
+}
+
+.panel {
+  width: min(26rem, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 35%);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.close msr-close-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+section + section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+h3 {
+  margin: 0 0 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+
+.units {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.units button,
+.grid-control input {
+  background: var(--bg-panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.units button {
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.units button.active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg-panel-2));
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.grid-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.grid-control input {
+  width: 6.5rem;
+  padding: 8px 10px;
+}
+
+.suffix {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notice {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text);
+}

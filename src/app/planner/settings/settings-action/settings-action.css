@@ -1,0 +1,50 @@
+:host {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+:host:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+
+.glyph {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--accent);
+}
+
+.glyph > * {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.detail {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
