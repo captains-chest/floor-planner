@@ -14,13 +14,7 @@ import { furnitureById, furnitureObjectName, placementSpot } from './furniture';
 import { renderPlanSvg, type RenderedPlan } from './plan-export';
 import { measureImage, readFileAsDataUrl } from './image';
 import { parseProjectDocument, Persistence, serializeProject } from './persistence';
-import {
-  ObjectPose,
-  PlanEdit,
-  PlanEditResult,
-  PlanNotice,
-  StackDirection,
-} from './plan-edit';
+import { ObjectPose, PlanEdit, PlanEditResult, PlanNotice, StackDirection } from './plan-edit';
 import {
   BoxPick,
   collectBoxSelection,
@@ -35,6 +29,7 @@ import {
   selectFromHit as applySelectFromHit,
   selectionCount as countSelection,
 } from './selection';
+import { DEFAULT_HELPER_SPACING_METERS, normalizeHelperSpacing } from './helper-grid';
 import { formatLength, type LengthUnit } from './units';
 
 export type { ObjectPose, StackDirection };
@@ -60,6 +55,7 @@ export class PlannerStore {
   readonly #status = signal('Ready');
   readonly #historyTick = signal(0);
   readonly #lengthUnit = signal<LengthUnit>('m');
+  readonly #gridSpacingMeters = signal(DEFAULT_HELPER_SPACING_METERS);
 
   #viewSize = { width: 1200, height: 800 };
   #pendingFit = false;
@@ -73,6 +69,8 @@ export class PlannerStore {
   readonly scaleDialog = this.#scaleDialog.asReadonly();
   readonly status = this.#status.asReadonly();
   readonly lengthUnit = this.#lengthUnit.asReadonly();
+  /** Space between background helper lines, in meters. */
+  readonly gridSpacingMeters = this.#gridSpacingMeters.asReadonly();
 
   readonly imageSizeMeters = computed(() => {
     const background = this.#plan().background;
@@ -119,12 +117,13 @@ export class PlannerStore {
       const plan = this.#plan();
       const imageDataUrl = this.#imageDataUrl();
       const lengthUnit = this.#lengthUnit();
+      const gridSpacingMeters = this.#gridSpacingMeters();
       const ready = this.#ready();
       if (!ready) {
         return;
       }
       const handle = setTimeout(() => {
-        void this.#persistence.save({ plan, imageDataUrl, lengthUnit });
+        void this.#persistence.save({ plan, imageDataUrl, lengthUnit, gridSpacingMeters });
       }, 280);
       onCleanup(() => clearTimeout(handle));
     });
@@ -171,6 +170,11 @@ export class PlannerStore {
     this.#lengthUnit.set(unit);
   }
 
+  /** Set the space between background helper lines. Stored in meters; the toolbar shows the current unit. */
+  setGridSpacing(meters: number): void {
+    this.#gridSpacingMeters.set(normalizeHelperSpacing(meters));
+  }
+
   /** The plan as a standalone, print-friendly SVG (for PNG export and printing). */
   renderPlan(options?: { longSidePx?: number }): RenderedPlan {
     return renderPlanSvg(
@@ -184,6 +188,7 @@ export class PlannerStore {
       plan: this.#plan(),
       imageDataUrl: this.#imageDataUrl(),
       lengthUnit: this.#lengthUnit(),
+      gridSpacingMeters: this.#gridSpacingMeters(),
     });
     return {
       filename: `${fileSlug(this.#plan().name)}.floorplan.json`,
@@ -204,6 +209,7 @@ export class PlannerStore {
       throw new Error('Not a floor planner project');
     }
     this.#lengthUnit.set(parsed.lengthUnit);
+    this.#gridSpacingMeters.set(parsed.gridSpacingMeters);
     this.#apply(this.#edit.importProject(parsed.plan, parsed.imageDataUrl));
     this.setTool('select');
   }
@@ -356,7 +362,9 @@ export class PlannerStore {
     this.#sync();
     if ('measurement' in result) {
       this.#selection.set({ type: 'measurement', id: result.measurement.id });
-      this.#status.set(`Measured ${formatLength(Math.hypot(end.x - start.x, end.y - start.y), this.#lengthUnit())}`);
+      this.#status.set(
+        `Measured ${formatLength(Math.hypot(end.x - start.x, end.y - start.y), this.#lengthUnit())}`,
+      );
       return result.measurement;
     }
     this.#applyNotice(result.notice);
@@ -425,6 +433,7 @@ export class PlannerStore {
     if (saved) {
       this.#edit.hydrate(saved.plan, saved.imageDataUrl);
       this.#lengthUnit.set(saved.lengthUnit);
+      this.#gridSpacingMeters.set(saved.gridSpacingMeters);
       this.#sync();
     }
     this.#ready.set(true);
