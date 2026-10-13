@@ -461,18 +461,8 @@ type DragState =
             stroke-width="2"
             vector-effect="non-scaling-stroke"
           />
-          <circle
-            [attr.cx]="preview.start.x"
-            [attr.cy]="preview.start.y"
-            [attr.r]="handleSize() * 0.45"
-            fill="var(--snap)"
-          />
-          <circle
-            [attr.cx]="preview.end.x"
-            [attr.cy]="preview.end.y"
-            [attr.r]="handleSize() * 0.45"
-            fill="var(--snap)"
-          />
+          <circle [attr.cx]="preview.start.x" [attr.cy]="preview.start.y" [attr.r]="handleSize() * 0.45" fill="var(--snap)" />
+          <circle [attr.cx]="preview.end.x" [attr.cy]="preview.end.y" [attr.r]="handleSize() * 0.45" fill="var(--snap)" />
           <text
             [attr.x]="preview.mid.x"
             [attr.y]="preview.mid.y - labelSize()"
@@ -579,8 +569,8 @@ type DragState =
         <div>
           <h2>Import a floor plan image</h2>
           <p>
-            Drop an image onto the canvas, then use Scale and mark a known length so everything is
-            in real-world units.
+            Drop an image onto the canvas, then use Scale and mark a known length so
+            everything is in real-world units.
           </p>
         </div>
       </div>
@@ -641,7 +631,7 @@ export class Canvas {
     const { width, height } = this.viewportSize();
     const worldW = width / zoom;
     const worldH = height / zoom;
-    const minorStep = drawnHelperStep(this.store.gridSpacingMeters(), Math.max(worldW, worldH));
+    const minorStep = drawnHelperStep(this.store.gridSpacingMeters(), zoom);
     const majorStep = minorStep * MAJOR_HELPER_MULTIPLE;
     return {
       left: panX,
@@ -1003,7 +993,11 @@ export class Canvas {
         this.scaleP1.set({ ...snapped.point });
         this.store.setStatus('Click the other end of the known length · hold Alt for 90°');
       } else {
-        const end = this.constrainOrthoPoint(p1, snapped.point, event.altKey || this.altHeld());
+        const end = this.constrainOrthoPoint(
+          p1,
+          snapped.point,
+          event.altKey || this.altHeld(),
+        );
         this.store.openScaleDialog(p1, end);
         this.scaleP1.set(null);
       }
@@ -1068,11 +1062,9 @@ export class Canvas {
         }
         const box = itemsBBox(targets);
         const center =
-          targets.length === 1
-            ? objectCenter(targets[0])
-            : box
-              ? { x: box.x + box.width / 2, y: box.y + box.depth / 2 }
-              : objectCenter(targets[0]);
+          targets.length === 1 ? objectCenter(targets[0]) : box
+            ? { x: box.x + box.width / 2, y: box.y + box.depth / 2 }
+            : objectCenter(targets[0]);
         this.drag.set({
           type: 'rotate-objects',
           orig: targets.map((obj) => ({
@@ -1246,7 +1238,11 @@ export class Canvas {
       }
       const measuredPoint = linePointToMeasured(measurement, snapped.point);
       const origin = drag.end === 'start' ? measurement.end : measurement.start;
-      const point = this.constrainOrthoPoint(origin, measuredPoint, event.altKey || this.altHeld());
+      const point = this.constrainOrthoPoint(
+        origin,
+        measuredPoint,
+        event.altKey || this.altHeld(),
+      );
       if (drag.end === 'start') {
         this.store.updateMeasurement(drag.id, { start: { ...point } });
       } else {
@@ -1321,7 +1317,9 @@ export class Canvas {
     const tool = this.store.tool();
     const drag = this.drag();
     const wantsSnap =
-      tool === 'scale' || tool === 'measure' || drag.type === 'move-measurement-end';
+      tool === 'scale' ||
+      tool === 'measure' ||
+      drag.type === 'move-measurement-end';
     const shift = event.shiftKey || this.shiftHeld();
     const zoom = this.store.plan().viewport.zoom;
     const enabled = wantsSnap && !shift;

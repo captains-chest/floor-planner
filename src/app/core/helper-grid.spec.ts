@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_ZOOM } from '../models/floor-plan';
 import {
   DEFAULT_HELPER_SPACING_METERS,
   drawnHelperStep,
@@ -18,18 +19,30 @@ describe('normalizeHelperSpacing', () => {
 
   it('clamps spacing to the allowed range', () => {
     expect(normalizeHelperSpacing(0.0001)).toBe(MIN_HELPER_SPACING_METERS);
+    expect(normalizeHelperSpacing(0.005)).toBe(0.01);
+    expect(normalizeHelperSpacing(0.01)).toBe(0.01);
     expect(normalizeHelperSpacing(250)).toBe(MAX_HELPER_SPACING_METERS);
   });
 });
 
 describe('drawnHelperStep', () => {
-  it('draws the chosen spacing when the view can show it', () => {
-    expect(drawnHelperStep(1, 30)).toBe(1);
+  it('draws the chosen spacing when lines are at least 4 px apart', () => {
+    expect(drawnHelperStep(1, 40)).toBe(1);
     expect(drawnHelperStep(0.25, 40)).toBe(0.25);
   });
 
-  it('draws a whole multiple of the chosen spacing when lines would be too dense', () => {
-    expect(drawnHelperStep(0.001, 50)).toBe(0.125);
-    expect(drawnHelperStep(0.001, 50) % 0.001).toBeCloseTo(0);
+  it('steps up through a 1-2-5 multiple when lines would be closer than 4 px', () => {
+    expect(drawnHelperStep(0.01, 200) / 0.01).toBeCloseTo(2);
+    expect(drawnHelperStep(0.01, 100) / 0.01).toBeCloseTo(5);
+    expect(drawnHelperStep(0.01, 40) / 0.01).toBeCloseTo(10);
+    expect(drawnHelperStep(0.01, 10) / 0.01).toBeCloseTo(50);
+  });
+
+  it('draws a 1 cm spacing exactly at maximum zoom on a wide canvas', () => {
+    const wideSpanMeters = 4000 / MAX_ZOOM;
+    expect(wideSpanMeters / MIN_HELPER_SPACING_METERS).toBeGreaterThan(400);
+    expect(drawnHelperStep(MIN_HELPER_SPACING_METERS, MAX_ZOOM)).toBeCloseTo(
+      MIN_HELPER_SPACING_METERS,
+    );
   });
 });

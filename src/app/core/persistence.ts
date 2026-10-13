@@ -221,10 +221,7 @@ function normalizeObject(raw: unknown): PlacedObject | null {
   if (typeof value.id !== 'string') {
     return null;
   }
-  const kind =
-    value.kind === 'circle' || value.kind === 'ellipse' || value.kind === 'rect'
-      ? value.kind
-      : 'rect';
+  const kind = value.kind === 'circle' || value.kind === 'ellipse' || value.kind === 'rect' ? value.kind : 'rect';
   return {
     id: value.id,
     kind,

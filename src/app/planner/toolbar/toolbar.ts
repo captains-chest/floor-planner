@@ -10,6 +10,7 @@ import {
   formatLength,
   inputStep,
   metersToDisplay,
+  roundMetersForDisplay,
 } from '../../core/units';
 
 @Component({
@@ -327,10 +328,7 @@ export class Toolbar {
   protected readonly gridDisplay = computed(() =>
     formatDisplayNumber(this.store.gridSpacingMeters(), this.store.lengthUnit()),
   );
-  /**
-   * Same as the step, so the spinner counts 1, 0.99, 0.98 in meters.
-   * A 1 mm minimum shifts that series and turns 1 into 0.991.
-   */
+  /** Field minimum matches this step, so the spinner stays on the displayed series. */
   protected readonly gridInputStep = computed(() => inputStep(this.store.lengthUnit()));
   protected readonly gridMax = computed(() =>
     metersToDisplay(MAX_HELPER_SPACING_METERS, this.store.lengthUnit()),
@@ -338,7 +336,9 @@ export class Toolbar {
 
   protected setGridSpacing(event: Event): void {
     const input = event.target as HTMLInputElement;
-    const meters = displayToMeters(Number(input.value), this.store.lengthUnit());
+    const unit = this.store.lengthUnit();
+    const typed = displayToMeters(Number(input.value), unit);
+    const meters = roundMetersForDisplay(typed, unit);
     if (!Number.isFinite(meters) || meters <= 0) {
       input.value = this.gridDisplay();
       return;
