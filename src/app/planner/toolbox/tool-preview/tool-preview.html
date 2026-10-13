@@ -1,0 +1,26 @@
+<div app-tool-demo [tool]="guide().id"></div>
+<div class="copy">
+  <div class="title-row">
+    <p class="title">{{ guide().label }}</p>
+    <kbd class="shortcut">{{ guide().shortcut }}</kbd>
+  </div>
+  <p class="summary">{{ guide().summary }}</p>
+  @if (guide().tips.length > 0) {
+    <p class="hold">Hold</p>
+    <ul>
+      @for (tip of guide().tips; track tip.text) {
+        <li>
+          <span class="keys">
+            @for (key of tip.keys; track key; let last = $last) {
+              <kbd>{{ key }}</kbd>
+              @if (!last) {
+                <span class="or">or</span>
+              }
+            }
+          </span>
+          <span>{{ tip.text }}</span>
+        </li>
+      }
+    </ul>
+  }
+</div>

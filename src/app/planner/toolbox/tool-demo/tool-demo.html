@@ -1,0 +1,62 @@
+@switch (tool()) {
+  @case ('select') {
+    <div class="sofa"><span class="ring"></span></div>
+    <div class="chair"><span class="ring"></span></div>
+    <div class="marquee window"></div>
+    <div class="marquee crossing"></div>
+    <svg class="pointer select-pointer" viewBox="0 0 16 16">
+      <path
+        d="M1 1 L1 14 L4.4 10.4 L8 16 L10.1 14.9 L6.5 9.3 L11.2 8.8 Z"
+        fill="#fff"
+        stroke="#111"
+        stroke-width="0.8"
+        stroke-linejoin="round"
+      />
+    </svg>
+  }
+  @case ('pan') {
+    <div class="world">
+      <div class="sofa"></div>
+      <div class="chair"></div>
+      <svg class="pointer" viewBox="0 0 16 16">
+        <path
+          d="M1 1 L1 14 L4.4 10.4 L8 16 L10.1 14.9 L6.5 9.3 L11.2 8.8 Z"
+          fill="#fff"
+          stroke="#111"
+          stroke-width="0.8"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </div>
+  }
+  @case ('scale') {
+    <div class="wall"></div>
+    <div class="scale-line"></div>
+    <div class="dot scale-start"></div>
+    <div class="dot scale-end"></div>
+    <span class="chip scale-chip">4.20 m</span>
+  }
+  @case ('measure') {
+    <div class="segment"></div>
+    <div class="dot measure-start"></div>
+    <div class="dot measure-end"></div>
+    <div class="dimension">
+      <span class="tick left"></span>
+      <span class="tick right"></span>
+      <div class="dim-line"></div>
+      <span class="chip dim-chip">2.40 m</span>
+    </div>
+  }
+  @case ('rect') {
+    <div class="shape rect"></div>
+    <div class="crosshair"><span></span><span></span></div>
+  }
+  @case ('circle') {
+    <div class="shape circle"></div>
+    <div class="crosshair"><span></span><span></span></div>
+  }
+  @case ('ellipse') {
+    <div class="shape ellipse"></div>
+    <div class="crosshair"><span></span><span></span></div>
+  }
+}
