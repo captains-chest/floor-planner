@@ -14,13 +14,7 @@ import { furnitureById, furnitureObjectName, placementSpot } from './furniture';
 import { renderPlanSvg, type RenderedPlan } from './plan-export';
 import { measureImage, readFileAsDataUrl } from './image';
 import { parseProjectDocument, Persistence, serializeProject } from './persistence';
-import {
-  ObjectPose,
-  PlanEdit,
-  PlanEditResult,
-  PlanNotice,
-  StackDirection,
-} from './plan-edit';
+import { ObjectPose, PlanEdit, PlanEditResult, PlanNotice, StackDirection } from './plan-edit';
 import {
   BoxPick,
   collectBoxSelection,
@@ -368,7 +362,9 @@ export class PlannerStore {
     this.#sync();
     if ('measurement' in result) {
       this.#selection.set({ type: 'measurement', id: result.measurement.id });
-      this.#status.set(`Measured ${formatLength(Math.hypot(end.x - start.x, end.y - start.y), this.#lengthUnit())}`);
+      this.#status.set(
+        `Measured ${formatLength(Math.hypot(end.x - start.x, end.y - start.y), this.#lengthUnit())}`,
+      );
       return result.measurement;
     }
     this.#applyNotice(result.notice);
@@ -377,7 +373,7 @@ export class PlannerStore {
 
   updateMeasurement(
     id: string,
-    patch: Partial<Pick<Measurement, 'start' | 'end' | 'offset'>>,
+    patch: Partial<Pick<Measurement, 'start' | 'end' | 'offset' | 'color'>>,
   ): void {
     this.#edit.updateMeasurement(id, patch);
     this.#sync();

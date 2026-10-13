@@ -11,7 +11,8 @@ import {
   viewChild,
 } from '@angular/core';
 import {
-  OBJECT_COLORS,
+  objectColor,
+  measurementColor,
   PlacedObject,
   Point,
   SNAP_PIXELS,
@@ -375,7 +376,7 @@ type DragState =
               [attr.y1]="item.originStart.y"
               [attr.x2]="item.start.x"
               [attr.y2]="item.start.y"
-              stroke="var(--measure)"
+              [attr.stroke]="item.color"
               stroke-width="1.5"
               vector-effect="non-scaling-stroke"
             />
@@ -384,7 +385,7 @@ type DragState =
               [attr.y1]="item.originEnd.y"
               [attr.x2]="item.end.x"
               [attr.y2]="item.end.y"
-              stroke="var(--measure)"
+              [attr.stroke]="item.color"
               stroke-width="1.5"
               vector-effect="non-scaling-stroke"
             />
@@ -393,7 +394,7 @@ type DragState =
               [attr.y1]="item.start.y"
               [attr.x2]="item.end.x"
               [attr.y2]="item.end.y"
-              stroke="var(--measure)"
+              [attr.stroke]="item.color"
               stroke-width="2"
               vector-effect="non-scaling-stroke"
             />
@@ -402,7 +403,7 @@ type DragState =
               [attr.y1]="item.start.y - item.tickDy"
               [attr.x2]="item.start.x + item.tickDx"
               [attr.y2]="item.start.y + item.tickDy"
-              stroke="var(--measure)"
+              [attr.stroke]="item.color"
               stroke-width="2"
               vector-effect="non-scaling-stroke"
             />
@@ -411,7 +412,7 @@ type DragState =
               [attr.y1]="item.end.y - item.tickDy"
               [attr.x2]="item.end.x + item.tickDx"
               [attr.y2]="item.end.y + item.tickDy"
-              stroke="var(--measure)"
+              [attr.stroke]="item.color"
               stroke-width="2"
               vector-effect="non-scaling-stroke"
             />
@@ -419,7 +420,7 @@ type DragState =
               [attr.x]="item.mid.x"
               [attr.y]="item.mid.y - labelSize()"
               text-anchor="middle"
-              fill="var(--measure)"
+              [attr.fill]="item.color"
               [attr.font-size]="labelSize()"
               font-weight="600"
             >
@@ -461,8 +462,18 @@ type DragState =
             stroke-width="2"
             vector-effect="non-scaling-stroke"
           />
-          <circle [attr.cx]="preview.start.x" [attr.cy]="preview.start.y" [attr.r]="handleSize() * 0.45" fill="var(--snap)" />
-          <circle [attr.cx]="preview.end.x" [attr.cy]="preview.end.y" [attr.r]="handleSize() * 0.45" fill="var(--snap)" />
+          <circle
+            [attr.cx]="preview.start.x"
+            [attr.cy]="preview.start.y"
+            [attr.r]="handleSize() * 0.45"
+            fill="var(--snap)"
+          />
+          <circle
+            [attr.cx]="preview.end.x"
+            [attr.cy]="preview.end.y"
+            [attr.r]="handleSize() * 0.45"
+            fill="var(--snap)"
+          />
           <text
             [attr.x]="preview.mid.x"
             [attr.y]="preview.mid.y - labelSize()"
@@ -569,8 +580,8 @@ type DragState =
         <div>
           <h2>Import a floor plan image</h2>
           <p>
-            Drop an image onto the canvas, then use Scale and mark a known length so
-            everything is in real-world units.
+            Drop an image onto the canvas, then use Scale and mark a known length so everything is
+            in real-world units.
           </p>
         </div>
       </div>
@@ -646,7 +657,7 @@ export class Canvas {
   protected readonly drawList = computed(() =>
     this.store.plan().objects.map((obj) => ({
       obj,
-      fill: OBJECT_COLORS[obj.kind],
+      fill: objectColor(obj),
     })),
   );
 
@@ -723,6 +734,7 @@ export class Canvas {
     return (this.store.plan().measurements ?? []).map((item) => ({
       ...dimensionView(item.start, item.end, tick, this.store.lengthUnit(), item.offset ?? 0),
       id: item.id,
+      color: measurementColor(item),
       selected: selectedIds.has(item.id),
     }));
   });
@@ -993,11 +1005,7 @@ export class Canvas {
         this.scaleP1.set({ ...snapped.point });
         this.store.setStatus('Click the other end of the known length · hold Alt for 90°');
       } else {
-        const end = this.constrainOrthoPoint(
-          p1,
-          snapped.point,
-          event.altKey || this.altHeld(),
-        );
+        const end = this.constrainOrthoPoint(p1, snapped.point, event.altKey || this.altHeld());
         this.store.openScaleDialog(p1, end);
         this.scaleP1.set(null);
       }
@@ -1062,9 +1070,11 @@ export class Canvas {
         }
         const box = itemsBBox(targets);
         const center =
-          targets.length === 1 ? objectCenter(targets[0]) : box
-            ? { x: box.x + box.width / 2, y: box.y + box.depth / 2 }
-            : objectCenter(targets[0]);
+          targets.length === 1
+            ? objectCenter(targets[0])
+            : box
+              ? { x: box.x + box.width / 2, y: box.y + box.depth / 2 }
+              : objectCenter(targets[0]);
         this.drag.set({
           type: 'rotate-objects',
           orig: targets.map((obj) => ({
@@ -1238,11 +1248,7 @@ export class Canvas {
       }
       const measuredPoint = linePointToMeasured(measurement, snapped.point);
       const origin = drag.end === 'start' ? measurement.end : measurement.start;
-      const point = this.constrainOrthoPoint(
-        origin,
-        measuredPoint,
-        event.altKey || this.altHeld(),
-      );
+      const point = this.constrainOrthoPoint(origin, measuredPoint, event.altKey || this.altHeld());
       if (drag.end === 'start') {
         this.store.updateMeasurement(drag.id, { start: { ...point } });
       } else {
@@ -1317,9 +1323,7 @@ export class Canvas {
     const tool = this.store.tool();
     const drag = this.drag();
     const wantsSnap =
-      tool === 'scale' ||
-      tool === 'measure' ||
-      drag.type === 'move-measurement-end';
+      tool === 'scale' || tool === 'measure' || drag.type === 'move-measurement-end';
     const shift = event.shiftKey || this.shiftHeld();
     const zoom = this.store.plan().viewport.zoom;
     const enabled = wantsSnap && !shift;

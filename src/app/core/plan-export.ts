@@ -1,4 +1,4 @@
-import { FloorPlan, OBJECT_COLORS, PlacedObject } from '../models/floor-plan';
+import { FloorPlan, PlacedObject, objectColor } from '../models/floor-plan';
 import { contentBBox, dimensionView, type BoundingBox } from './geometry';
 import { formatLength, type LengthUnit } from './units';
 
@@ -73,11 +73,13 @@ export function renderPlanSvg(
       lengthUnit,
       measurement.offset ?? 0,
     );
-    const stroke = `stroke="${MEASURE}" stroke-width="${n(m(2))}"`;
+    // Custom colors print as chosen; the default uses a darker teal that reads on white paper.
+    const color = measurement.color ?? MEASURE;
+    const stroke = `stroke="${color}" stroke-width="${n(m(2))}"`;
     parts.push(
       `<g class="measurement">` +
-        line(view.originStart, view.start, `stroke="${MEASURE}" stroke-width="${n(m(1))}"`) +
-        line(view.originEnd, view.end, `stroke="${MEASURE}" stroke-width="${n(m(1))}"`) +
+        line(view.originStart, view.start, `stroke="${color}" stroke-width="${n(m(1))}"`) +
+        line(view.originEnd, view.end, `stroke="${color}" stroke-width="${n(m(1))}"`) +
         line(view.start, view.end, stroke) +
         line(
           { x: view.start.x - view.tickDx, y: view.start.y - view.tickDy },
@@ -89,7 +91,7 @@ export function renderPlanSvg(
           { x: view.end.x + view.tickDx, y: view.end.y + view.tickDy },
           stroke,
         ) +
-        `<text x="${n(view.mid.x)}" y="${n(view.mid.y - label * 0.6)}" text-anchor="middle" font-size="${n(label)}" font-weight="600" fill="${MEASURE}" paint-order="stroke" stroke="#fff" stroke-width="${n(m(3))}">${esc(view.lengthLabel)}</text>` +
+        `<text x="${n(view.mid.x)}" y="${n(view.mid.y - label * 0.6)}" text-anchor="middle" font-size="${n(label)}" font-weight="600" fill="${color}" paint-order="stroke" stroke="#fff" stroke-width="${n(m(3))}">${esc(view.lengthLabel)}</text>` +
         `</g>`,
     );
   }
@@ -132,7 +134,7 @@ export function exportFilename(planName: string, extension: string): string {
 function objectSvg(obj: PlacedObject, hairline: number, label: number): string {
   const cx = obj.x + obj.width / 2;
   const cy = obj.y + obj.depth / 2;
-  const fill = OBJECT_COLORS[obj.kind];
+  const fill = objectColor(obj);
   const paint = `fill="${fill}" fill-opacity="0.82" stroke="${INK}" stroke-opacity="0.6" stroke-width="${n(hairline)}"`;
   const shape =
     obj.kind === 'rect'

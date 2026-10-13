@@ -345,7 +345,10 @@ export class PlanEdit {
     const next = restackObjects(objects, ids, direction);
     if (sameObjectOrder(objects, next)) {
       return {
-        notice: direction === 'front' || direction === 'forward' ? { kind: 'already-front' } : { kind: 'already-back' },
+        notice:
+          direction === 'front' || direction === 'forward'
+            ? { kind: 'already-front' }
+            : { kind: 'already-back' },
       };
     }
     this.#record();
@@ -421,7 +424,7 @@ export class PlanEdit {
 
   updateMeasurement(
     id: string,
-    patch: Partial<Pick<Measurement, 'start' | 'end' | 'offset'>>,
+    patch: Partial<Pick<Measurement, 'start' | 'end' | 'offset' | 'color'>>,
   ): void {
     this.#record();
     this.#plan = {

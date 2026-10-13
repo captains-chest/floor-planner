@@ -44,6 +44,21 @@ describe('renderPlanSvg', () => {
     expect(svg).toContain('>4.00 m</text>');
   });
 
+  it('uses custom object and measurement colors, defaults otherwise', () => {
+    const base = plan();
+    const colored = plan({
+      objects: [{ ...base.objects[0], color: '#ff0000' }, base.objects[1]],
+      measurements: [{ ...base.measurements[0], color: '#0000ff' }],
+    });
+    const { svg } = renderPlanSvg({ plan: colored, imageDataUrl: null, lengthUnit: 'm' });
+    expect(svg).toContain('fill="#ff0000"');
+    expect(svg).toContain('fill="#ffb07e"');
+    expect(svg).toContain('stroke="#0000ff"');
+    expect(svg).not.toContain('stroke="#0f7a68"');
+    const plain = renderPlanSvg({ plan: base, imageDataUrl: null, lengthUnit: 'm' }).svg;
+    expect(plain).toContain('stroke="#0f7a68"');
+  });
+
   it('escapes the plan name in the title and header', () => {
     const { svg } = renderPlanSvg({ plan: plan(), imageDataUrl: null, lengthUnit: 'm' });
     expect(svg).toContain('<title>Flat &lt;2nd&gt; &amp; &quot;loft&quot;</title>');

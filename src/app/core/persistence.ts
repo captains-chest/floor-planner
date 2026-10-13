@@ -5,6 +5,7 @@ import {
   Measurement,
   ObjectGroup,
   PlacedObject,
+  normalizeColor,
 } from '../models/floor-plan';
 import { normalizeHelperSpacing } from './helper-grid';
 import { isLengthUnit, type LengthUnit } from './units';
@@ -210,7 +211,8 @@ function normalizeMeasurement(raw: unknown): Measurement | null {
   if (!start || !end) {
     return null;
   }
-  return { id: value.id, start, end, offset: num(value.offset, 0) };
+  const color = normalizeColor(value.color);
+  return { id: value.id, start, end, offset: num(value.offset, 0), ...(color ? { color } : {}) };
 }
 
 function normalizeObject(raw: unknown): PlacedObject | null {
@@ -221,7 +223,11 @@ function normalizeObject(raw: unknown): PlacedObject | null {
   if (typeof value.id !== 'string') {
     return null;
   }
-  const kind = value.kind === 'circle' || value.kind === 'ellipse' || value.kind === 'rect' ? value.kind : 'rect';
+  const color = normalizeColor(value.color);
+  const kind =
+    value.kind === 'circle' || value.kind === 'ellipse' || value.kind === 'rect'
+      ? value.kind
+      : 'rect';
   return {
     id: value.id,
     kind,
@@ -232,6 +238,7 @@ function normalizeObject(raw: unknown): PlacedObject | null {
     depth: Math.max(0.01, num(value.depth, 0.8)),
     rotation: num(value.rotation, 0),
     groupId: typeof value.groupId === 'string' ? value.groupId : null,
+    ...(color ? { color } : {}),
   };
 }
 
