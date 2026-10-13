@@ -1,7 +1,7 @@
 import { Component, inject, signal, viewChild } from '@angular/core';
 import { formatLength as formatLengthValue, parseLengthToMeters } from '../core/units';
 import { PlannerStore } from '../core/planner-store';
-import { Tool } from '../models/floor-plan';
+import { toolForShortcut } from './toolbox/tool-guides';
 import { Canvas } from './canvas/canvas';
 import { Inspector } from './inspector/inspector';
 import { Toolbar } from './toolbar/toolbar';
@@ -148,8 +148,8 @@ import { Toolbox } from './toolbox/toolbox';
       <div class="status" role="contentinfo">
         <span role="status" aria-live="polite">{{ store.status() }}</span>
         <span
-          >Units: {{ store.lengthUnit() }} · Shift: no snap · Alt: 90° · Ctrl: corner snap ·
-          Space: pan</span
+          >Units: {{ store.lengthUnit() }} · Shift: no snap · Alt: 90° · Ctrl: corner snap · Space:
+          pan</span
         >
       </div>
     }
@@ -319,7 +319,7 @@ export class Planner {
       return;
     }
 
-    const tool = shortcutTool(event.key);
+    const tool = toolForShortcut(event.key);
     if (tool) {
       this.store.setTool(tool);
     }
@@ -342,25 +342,4 @@ function isTypingTarget(target: EventTarget | null): boolean {
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement
   );
-}
-
-function shortcutTool(key: string): Tool | null {
-  switch (key.toLowerCase()) {
-    case 'v':
-      return 'select';
-    case 'h':
-      return 'pan';
-    case 's':
-      return 'scale';
-    case 'm':
-      return 'measure';
-    case 'r':
-      return 'rect';
-    case 'c':
-      return 'circle';
-    case 'e':
-      return 'ellipse';
-    default:
-      return null;
-  }
 }

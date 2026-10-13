@@ -1,0 +1,110 @@
+:host {
+  position: fixed;
+  z-index: 5;
+  left: 0;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* 220px matches TOOL_PREVIEW_WIDTH_PX until the host sets --preview-width. */
+  width: var(--preview-width, 220px);
+  box-sizing: border-box;
+  padding: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-panel-2);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+  pointer-events: none;
+  visibility: hidden;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+}
+
+:host(.placed) {
+  visibility: visible;
+}
+
+.copy {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.title,
+.summary,
+.hold,
+ul {
+  margin: 0;
+}
+
+.title {
+  font-weight: 600;
+}
+
+.summary {
+  margin-top: 2px;
+  color: var(--text-dim);
+}
+
+.hold {
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: baseline;
+}
+
+.keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 4.8rem;
+}
+
+.or {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+kbd {
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.shortcut {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
