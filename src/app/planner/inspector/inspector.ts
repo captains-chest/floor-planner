@@ -1,5 +1,6 @@
 import { Component, inject } from '@angular/core';
 import { dist } from '../../core/geometry';
+import { measurementColor, normalizeColor, objectColor } from '../../models/floor-plan';
 import { PlannerStore } from '../../core/planner-store';
 import {
   displayToMeters,
@@ -72,6 +73,23 @@ import { StackOrder } from './stack-order/stack-order';
       padding: 8px 10px;
       font: inherit;
       font-size: 13px;
+    }
+
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .color-row input[type='color'] {
+      width: 3rem;
+      height: 2.25rem;
+      padding: 2px;
+      cursor: pointer;
+    }
+
+    .color-row .action {
+      width: auto;
     }
 
     .row {
@@ -190,6 +208,24 @@ import { StackOrder } from './stack-order/stack-order';
             (change)="patchObject({ rotation: numberValue($event) })"
           />
         </label>
+        <div class="color-row">
+          <label for="object-color">Color</label>
+          <input
+            id="object-color"
+            type="color"
+            [value]="objectColor(obj)"
+            (change)="setObjectColor(obj.id, $event)"
+          />
+          @if (obj.color) {
+            <button
+              type="button"
+              class="action"
+              (click)="store.updateObject(obj.id, { color: undefined })"
+            >
+              Reset color
+            </button>
+          }
+        </div>
         <button type="button" class="action" (click)="store.copySelection()">Copy object</button>
         <app-stack-order />
         <button class="danger" type="button" (click)="store.deleteSelection()">
@@ -201,6 +237,24 @@ import { StackOrder } from './stack-order/stack-order';
           Δx {{ format(abs(measurement.end.x - measurement.start.x)) }} · Δy
           {{ format(abs(measurement.end.y - measurement.start.y)) }}
         </p>
+        <div class="color-row">
+          <label for="measurement-color">Color</label>
+          <input
+            id="measurement-color"
+            type="color"
+            [value]="measurementColor(measurement)"
+            (change)="setMeasurementColor(measurement.id, $event)"
+          />
+          @if (measurement.color) {
+            <button
+              type="button"
+              class="action"
+              (click)="store.updateMeasurement(measurement.id, { color: undefined })"
+            >
+              Reset color
+            </button>
+          }
+        </div>
         <button class="danger" type="button" (click)="store.deleteSelection()">
           Delete measurement
         </button>
@@ -216,6 +270,22 @@ export class Inspector {
   protected readonly store = inject(PlannerStore);
   protected readonly dist = dist;
   protected readonly abs = Math.abs;
+  protected readonly objectColor = objectColor;
+  protected readonly measurementColor = measurementColor;
+
+  protected setObjectColor(id: string, event: Event): void {
+    const color = normalizeColor(this.inputValue(event));
+    if (color) {
+      this.store.updateObject(id, { color });
+    }
+  }
+
+  protected setMeasurementColor(id: string, event: Event): void {
+    const color = normalizeColor(this.inputValue(event));
+    if (color) {
+      this.store.updateMeasurement(id, { color });
+    }
+  }
 
   protected format(meters: number): string {
     return formatLength(meters, this.store.lengthUnit());
