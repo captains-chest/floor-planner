@@ -27,6 +27,12 @@ jobs:
           runtime: node@24
           cache: true
 
+      - name: Check Vite+ catalog is in sync
+        run: node scripts/check-vite-plus-sync.mjs
+
+      - name: Format, lint and type-check
+        run: pnpm exec vp check
+
       - name: Unit tests
         run: pnpm test
 

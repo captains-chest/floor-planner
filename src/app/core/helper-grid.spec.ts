@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { MAX_ZOOM } from '../models/floor-plan';
 import {
   DEFAULT_HELPER_SPACING_METERS,

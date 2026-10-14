@@ -103,7 +103,7 @@ export function normalizeColor(value: unknown): string | undefined {
     return undefined;
   }
   const hex = match[1].toLowerCase();
-  return hex.length === 3 ? `#${[...hex].map((c) => c + c).join('')}` : `#${hex}`;
+  return `#${hex.length === 3 ? hex.replace(/./g, '$&$&') : hex}`;
 }
 
 export function objectColor(obj: Pick<PlacedObject, 'kind' | 'color'>): string {

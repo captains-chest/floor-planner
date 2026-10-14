@@ -1,29 +1,40 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "07:00"
-      timezone: "Europe/Copenhagen"
+      interval: 'weekly'
+      day: 'monday'
+      time: '07:00'
+      timezone: 'Europe/Copenhagen'
     # TypeScript 7 is not supported by the Angular compiler yet (build fails with
     # "Angular compilation initialization failed"). Take it with the Angular release that adds it.
     ignore:
-      - dependency-name: "typescript"
-        update-types: ["version-update:semver-major"]
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
     groups:
+      # vite-plus pins its own Vite core; the `vite` catalog alias in pnpm-workspace.yaml must
+      # move with it, so keep them in one PR. CI fails if they drift apart.
+      vite-plus:
+        patterns:
+          - 'vite-plus'
+          - 'vite'
+          - '@voidzero-dev/*'
+      # Majors get their own PRs so they don't hold back minor/patch updates.
       npm-dependencies:
         patterns:
-          - "*"
-  - package-ecosystem: "github-actions"
-    directory: "/"
+          - '*'
+        update-types:
+          - 'minor'
+          - 'patch'
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "07:00"
-      timezone: "Europe/Copenhagen"
+      interval: 'weekly'
+      day: 'monday'
+      time: '07:00'
+      timezone: 'Europe/Copenhagen'
     groups:
       github-actions:
         patterns:
-          - "*"
+          - '*'

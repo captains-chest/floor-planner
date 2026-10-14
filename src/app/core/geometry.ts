@@ -1,9 +1,4 @@
-import {
-  FloorPlan,
-  Measurement,
-  Point,
-  type PlacedObject,
-} from '../models/floor-plan';
+import { FloorPlan, Measurement, Point, type PlacedObject } from '../models/floor-plan';
 import { formatLength, type LengthUnit } from './units';
 
 export function dist(a: Point, b: Point): number {
@@ -82,9 +77,10 @@ export function offsetSegment(
   };
 }
 
-export function measurementLine(
-  measurement: Pick<Measurement, 'start' | 'end' | 'offset'>,
-): { start: Point; end: Point } {
+export function measurementLine(measurement: Pick<Measurement, 'start' | 'end' | 'offset'>): {
+  start: Point;
+  end: Point;
+} {
   return offsetSegment(measurement.start, measurement.end, measurement.offset ?? 0);
 }
 
@@ -279,7 +275,11 @@ export function rotationHandlesFromBox(box: BoundingBox, zoom: number): Rotation
   return rotationHandlesFromCorners(corners, center, zoom);
 }
 
-function rotationHandlesFromCorners(corners: Point[], center: Point, zoom: number): RotationHandle[] {
+function rotationHandlesFromCorners(
+  corners: Point[],
+  center: Point,
+  zoom: number,
+): RotationHandle[] {
   const offset = 16 / zoom;
   return corners.map((corner) => {
     const vx = corner.x - center.x;
@@ -315,7 +315,12 @@ export function itemsBBox(objects: readonly PlacedObject[]): BoundingBox | null 
   if (!Number.isFinite(minX)) {
     return null;
   }
-  return { x: minX, y: minY, width: Math.max(0.01, maxX - minX), depth: Math.max(0.01, maxY - minY) };
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(0.01, maxX - minX),
+    depth: Math.max(0.01, maxY - minY),
+  };
 }
 
 export function rotatedObjectPose(

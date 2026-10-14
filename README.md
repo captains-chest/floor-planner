@@ -5,10 +5,12 @@ A browser floor-planning tool. Import a scanned or photographed plan, scale it f
 ## Run
 
 ```bash
-pnpm start
+pnpm install
+pnpm start     # http://localhost:4200
+pnpm test      # vp test (Vitest 5 via Vite+)
+pnpm check     # vp check: Oxfmt + Oxlint + type-check
+pnpm format    # vp fmt (Oxfmt)
 ```
-
-Open `http://localhost:4200/`.
 
 ## Production image
 

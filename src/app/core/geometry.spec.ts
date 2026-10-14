@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { createDefaultPlan, type Measurement } from '../models/floor-plan';
 import {
   dimensionView,
@@ -31,9 +31,7 @@ describe('signedPerpendicularOffset', () => {
   });
 
   it('ignores motion along the segment', () => {
-    expect(
-      signedPerpendicularOffset({ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 100, y: 1.5 }),
-    ).toBe(1.5);
+    expect(signedPerpendicularOffset({ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 100, y: 1.5 })).toBe(1.5);
   });
 });
 

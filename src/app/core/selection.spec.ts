@@ -1,10 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import {
-  createDefaultPlan,
-  FloorPlan,
-  Measurement,
-  PlacedObject,
-} from '../models/floor-plan';
+import { describe, expect, it } from 'vite-plus/test';
+import { createDefaultPlan, FloorPlan, Measurement, PlacedObject } from '../models/floor-plan';
 import {
   collectBoxSelection,
   selectBox,
@@ -85,7 +80,11 @@ describe('selectFromHit', () => {
     );
     const withC = selectFromHit(grouped, null, { type: 'object', id: 'c' }, false);
     const added = selectFromHit(grouped, withC, { type: 'object', id: 'a' }, true);
-    expect(selectedPlacedObjects(grouped, added).map((obj) => obj.id).sort()).toEqual(['a', 'b', 'c']);
+    expect(
+      selectedPlacedObjects(grouped, added)
+        .map((obj) => obj.id)
+        .sort(),
+    ).toEqual(['a', 'b', 'c']);
     const removed = selectFromHit(grouped, added, { type: 'object', id: 'b' }, true);
     expect(selectedPlacedObjects(grouped, removed).map((obj) => obj.id)).toEqual(['c']);
   });
