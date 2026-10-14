@@ -6,7 +6,11 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "vitest run"
+    "test": "vp test run",
+    "format": "vp fmt .",
+    "format:check": "vp fmt --check .",
+    "lint": "vp lint",
+    "check": "vp check"
   },
   "private": true,
   "packageManager": "pnpm@12.4.2",
@@ -25,8 +29,7 @@
     "@angular/build": "^22.2.2",
     "@angular/cli": "^22.2.2",
     "@angular/compiler-cli": "^22.2.2",
-    "prettier": "^3.9.9",
     "typescript": "~6.0.2",
-    "vitest": "^5.0.3"
+    "vite-plus": "catalog:"
   }
 }

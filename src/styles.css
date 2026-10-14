@@ -15,11 +15,7 @@
   --measure: #7ad0c0;
   --window-select: #4ea3ff;
   --crossing-select: #5dca7a;
-  font-family:
-    'Segoe UI',
-    system-ui,
-    -apple-system,
-    sans-serif;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 * {

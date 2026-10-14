@@ -3,11 +3,9 @@
   "compatibility_date": "2026-09-26",
   "assets": {
     "directory": "./dist/floor-planner/browser",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
   },
   "previews": {},
-  "routes": [
-    { "pattern": "floor-planner.captains-chest.com", "custom_domain": true }
-  ],
-  "workers_dev": false
+  "routes": [{ "pattern": "floor-planner.captains-chest.com", "custom_domain": true }],
+  "workers_dev": false,
 }

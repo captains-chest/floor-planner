@@ -82,8 +82,7 @@ export const selectedMeasurement = (plan: FloorPlan, selected: Selection): Measu
   selectedMeasurements(plan, selected)[0] ?? null;
 
 export const selectionCount = (plan: FloorPlan, selected: Selection): number =>
-  selectedPlacedObjects(plan, selected).length +
-  selectedMeasurements(plan, selected).length;
+  selectedPlacedObjects(plan, selected).length + selectedMeasurements(plan, selected).length;
 
 export const isObjectSelected = (plan: FloorPlan, selected: Selection, id: string): boolean =>
   selectedPlacedObjects(plan, selected).some((obj) => obj.id === id);

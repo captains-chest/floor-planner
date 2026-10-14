@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { TOOL_PREVIEW_GAP_PX, TOOL_PREVIEW_MARGIN_PX } from './constants';
 import { placeToolPreview, type Bounds, type ToolPreviewPlacement } from './functions';
 
