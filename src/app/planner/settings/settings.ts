@@ -7,16 +7,14 @@ import {
   viewChild,
   type Type,
 } from '@angular/core';
-import {
-  MsrCloseIconComponent,
-  MsrDownloadIconComponent,
-  MsrFolderOpenIconComponent,
-  MsrImageIconComponent,
-  MsrPrintIconComponent,
-  MsrSaveIconComponent,
-  MsrSettingsIconComponent,
-} from '@captains-chest/material-symbols-rounded-icons';
-import { MsrfSettingsIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled';
+import { MsrCloseIconComponent } from '@captains-chest/material-symbols-rounded-icons/close';
+import { MsrDownloadIconComponent } from '@captains-chest/material-symbols-rounded-icons/download';
+import { MsrFolderOpenIconComponent } from '@captains-chest/material-symbols-rounded-icons/folder-open';
+import { MsrImageIconComponent } from '@captains-chest/material-symbols-rounded-icons/image';
+import { MsrPrintIconComponent } from '@captains-chest/material-symbols-rounded-icons/print';
+import { MsrSaveIconComponent } from '@captains-chest/material-symbols-rounded-icons/save';
+import { MsrSettingsIconComponent } from '@captains-chest/material-symbols-rounded-icons/settings';
+import { MsrfSettingsIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/settings';
 import { MAX_HELPER_SPACING_METERS } from '../../core/helper-grid';
 import { exportFilename } from '../../core/plan-export';
 import { downloadBlob, printPlan, svgToPng } from '../../core/plan-raster';
