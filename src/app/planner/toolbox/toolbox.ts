@@ -128,6 +128,9 @@ const TOOL_ICONS = {
       display: grid;
       place-items: center;
       font-size: 1.25rem;
+      /* Icons are 1em by default since icons 3.0; keep them filling the 2rem button. */
+      --msr-icon-size: 2rem;
+      --msrf-icon-size: 2rem;
     }
   `,
   template: `

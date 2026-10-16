@@ -24,6 +24,9 @@
   width: 1.25rem;
   height: 1.25rem;
   color: var(--accent);
+  /* Icons are 1em by default since icons 3.0; keep them filling the glyph box. */
+  --msr-icon-size: 1.25rem;
+  --msrf-icon-size: 1.25rem;
 }
 
 .glyph > * {
