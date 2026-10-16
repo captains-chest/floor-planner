@@ -16,14 +16,12 @@ import { MsrPanToolAltIconComponent } from '@captains-chest/material-symbols-rou
 import { MsrRectangleIconComponent } from '@captains-chest/material-symbols-rounded-icons/rectangle';
 import { MsrStadiumIconComponent } from '@captains-chest/material-symbols-rounded-icons/stadium';
 import { MsrStraightenIconComponent } from '@captains-chest/material-symbols-rounded-icons/straighten';
-import {
-  MsrfArrowSelectorToolIconComponent,
-  MsrfCircleIconComponent,
-  MsrfPanToolAltIconComponent,
-  MsrfRectangleIconComponent,
-  MsrfStadiumIconComponent,
-  MsrfStraightenIconComponent,
-} from '@captains-chest/material-symbols-rounded-icons-filled';
+import { MsrfArrowSelectorToolIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/arrow-selector-tool';
+import { MsrfCircleIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/circle';
+import { MsrfPanToolAltIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/pan-tool-alt';
+import { MsrfRectangleIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/rectangle';
+import { MsrfStadiumIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/stadium';
+import { MsrfStraightenIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/straighten';
 import { PlannerStore } from '../../core/planner-store';
 import {
   TOOL_PREVIEW_CLOSE_DELAY_MS,

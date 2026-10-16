@@ -14,7 +14,7 @@ import { MsrImageIconComponent } from '@captains-chest/material-symbols-rounded-
 import { MsrPrintIconComponent } from '@captains-chest/material-symbols-rounded-icons/print';
 import { MsrSaveIconComponent } from '@captains-chest/material-symbols-rounded-icons/save';
 import { MsrSettingsIconComponent } from '@captains-chest/material-symbols-rounded-icons/settings';
-import { MsrfSettingsIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled';
+import { MsrfSettingsIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/settings';
 import { MAX_HELPER_SPACING_METERS } from '../../core/helper-grid';
 import { exportFilename } from '../../core/plan-export';
 import { downloadBlob, printPlan, svgToPng } from '../../core/plan-raster';
