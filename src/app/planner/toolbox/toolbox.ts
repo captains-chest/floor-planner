@@ -10,14 +10,12 @@ import {
   viewChild,
   type Type,
 } from '@angular/core';
-import {
-  MsrArrowSelectorToolIconComponent,
-  MsrCircleIconComponent,
-  MsrPanToolAltIconComponent,
-  MsrRectangleIconComponent,
-  MsrStadiumIconComponent,
-  MsrStraightenIconComponent,
-} from '@captains-chest/material-symbols-rounded-icons';
+import { MsrArrowSelectorToolIconComponent } from '@captains-chest/material-symbols-rounded-icons/arrow-selector-tool';
+import { MsrCircleIconComponent } from '@captains-chest/material-symbols-rounded-icons/circle';
+import { MsrPanToolAltIconComponent } from '@captains-chest/material-symbols-rounded-icons/pan-tool-alt';
+import { MsrRectangleIconComponent } from '@captains-chest/material-symbols-rounded-icons/rectangle';
+import { MsrStadiumIconComponent } from '@captains-chest/material-symbols-rounded-icons/stadium';
+import { MsrStraightenIconComponent } from '@captains-chest/material-symbols-rounded-icons/straighten';
 import {
   MsrfArrowSelectorToolIconComponent,
   MsrfCircleIconComponent,
