@@ -20,7 +20,6 @@ import {
   DEFAULT_WALL_THICKNESS,
 } from '../models/floor-plan';
 import { clamp, contentBBox, dist, scalePoint } from './geometry';
-import type { CupboardFront } from './furniture';
 import { selectionFromObjectIds, selectedPlacedObjects } from './selection';
 
 export type StackDirection = 'front' | 'back' | 'forward' | 'backward';
@@ -230,42 +229,6 @@ export class PlanEdit {
     this.#record();
     this.#plan = { ...this.#plan, objects: [...this.#plan.objects, obj] };
     return { object: obj };
-  }
-
-  /** Cupboard body plus two door fronts and handles, as one group, in a single undo step. */
-  addCupboardWithDoors(
-    width: number,
-    depth: number,
-    x: number,
-    y: number,
-    name: string,
-    pieces: CupboardFront,
-  ): { group: ObjectGroup } {
-    const group: ObjectGroup = { id: createId('group'), name };
-    const mk = (
-      kind: ShapeKind,
-      rect: { x: number; y: number; width: number; depth: number },
-      label: string,
-      color?: string,
-    ): PlacedObject => ({
-      id: createId('obj'),
-      kind,
-      name: label,
-      ...rect,
-      rotation: 0,
-      groupId: group.id,
-      ...(color ? { color } : {}),
-    });
-    const body = mk('rect', { x, y, width, depth }, name);
-    const panels = pieces.panels.map((rect) => mk('rect', rect, '', '#a8d4ff'));
-    const handles = pieces.handles.map((rect) => mk('circle', rect, '', '#f5f7fa'));
-    this.#record();
-    this.#plan = {
-      ...this.#plan,
-      objects: [...this.#plan.objects, body, ...panels, ...handles],
-      groups: [...(this.#plan.groups ?? []), group],
-    };
-    return { group };
   }
 
   updateObject(id: string, patch: Partial<PlacedObject>): void {

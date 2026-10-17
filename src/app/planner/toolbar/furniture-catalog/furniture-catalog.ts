@@ -188,7 +188,9 @@ import { PlannerStore } from '../../../core/planner-store';
                       (click)="add(item)"
                     >
                       <svg viewBox="0 0 100 70" aria-hidden="true" focusable="false">
-                        @if (item.kind === 'circle') {
+                        @if (item.id === cupboardDoorId) {
+                          <!-- cupboard + door drawn below, exactly as placed -->
+                        } @else if (item.kind === 'circle') {
                           <ellipse
                             cx="50"
                             cy="35"
@@ -211,38 +213,35 @@ import { PlannerStore } from '../../../core/planner-store';
                         }
                         @if (item.id === cupboardDoorId) {
                           <rect
-                            x="11"
-                            y="53"
-                            width="38"
-                            height="5"
-                            fill="#a8d4ff"
+                            x="32"
+                            y="6"
+                            width="36"
+                            height="22"
+                            fill="#7eb8ff"
+                            fill-opacity="0.82"
                             stroke="#0d1117"
-                            stroke-width="0.7"
                           />
-                          <rect
-                            x="51"
-                            y="53"
-                            width="38"
-                            height="5"
-                            fill="#a8d4ff"
-                            stroke="#0d1117"
-                            stroke-width="0.7"
+                          <line
+                            x1="32"
+                            y1="28"
+                            x2="68"
+                            y2="28"
+                            stroke="#f5f7fa"
+                            stroke-width="1.6"
                           />
-                          <circle
-                            cx="46"
-                            cy="54.5"
-                            r="1.6"
-                            fill="#f5f7fa"
-                            stroke="#0d1117"
-                            stroke-width="0.5"
+                          <line
+                            x1="32"
+                            y1="28"
+                            x2="32"
+                            y2="64"
+                            stroke="#f5f7fa"
+                            stroke-width="1.6"
                           />
-                          <circle
-                            cx="54"
-                            cy="54.5"
-                            r="1.6"
-                            fill="#f5f7fa"
-                            stroke="#0d1117"
-                            stroke-width="0.5"
+                          <path
+                            d="M 32 64 A 36 36 0 0 1 68 28"
+                            fill="none"
+                            stroke="#f5f7fa"
+                            stroke-width="1.4"
                           />
                         }
                       </svg>
