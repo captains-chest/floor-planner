@@ -1,4 +1,4 @@
-import { FloorPlan, PlacedObject, objectBorderColor, objectFill } from '../models/floor-plan';
+import { borderPaint, fillPaint, FloorPlan, PlacedObject } from '../models/floor-plan';
 import { contentBBox, dimensionView, type BoundingBox } from './geometry';
 import { formatLength, type LengthUnit } from './units';
 
@@ -134,12 +134,13 @@ export function exportFilename(planName: string, extension: string): string {
 function objectSvg(obj: PlacedObject, hairline: number, label: number): string {
   const cx = obj.x + obj.width / 2;
   const cy = obj.y + obj.depth / 2;
-  const fill = objectFill(obj);
-  const border = obj.borderColor;
-  const fillPaint = fill === 'transparent' ? 'fill="none"' : `fill="${fill}" fill-opacity="0.82"`;
+  const fill = fillPaint(obj);
+  const border = borderPaint(obj);
+  const fillAttr =
+    fill.fill === 'none' ? 'fill="none"' : `fill="${fill.fill}" fill-opacity="${n(fill.opacity)}"`;
   const paint = border
-    ? `${fillPaint} stroke="${objectBorderColor(obj)}" stroke-opacity="1" stroke-width="${n(hairline * 3)}"`
-    : `${fillPaint} stroke="none"`;
+    ? `${fillAttr} stroke="${border.stroke}" stroke-opacity="${n(border.opacity)}" stroke-width="${n(hairline * 3)}"`
+    : `${fillAttr} stroke="none"`;
   const shape =
     obj.kind === 'rect'
       ? `<rect x="${n(obj.x)}" y="${n(obj.y)}" width="${n(obj.width)}" height="${n(obj.depth)}" ${paint}/>`

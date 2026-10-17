@@ -6,7 +6,10 @@ import {
   OBJECT_BORDER_COLOR,
   OBJECT_COLORS,
   objectBorderColor,
+  colorWithOpacity,
   objectFill,
+  opacityPercent,
+  parseColor,
   objectColor,
 } from '../models/floor-plan';
 import { parseProjectDocument, PROJECT_KIND } from './persistence';
@@ -18,6 +21,22 @@ describe('colors', () => {
     expect(normalizeColor('red')).toBeUndefined();
     expect(normalizeColor('#12345')).toBeUndefined();
     expect(normalizeColor(42)).toBeUndefined();
+  });
+
+  it('parses alpha colors, combines opacity, and reports percents', () => {
+    expect(normalizeColor('#abcd')).toBe('#aabbccdd');
+    expect(normalizeColor('#AABBCCDD')).toBe('#aabbccdd');
+    expect(normalizeColor('#aabbccff')).toBe('#aabbcc');
+    expect(normalizeColor('#aabbcc00')).toBe('#aabbcc00');
+    expect(parseColor('#7eb8ff80', '#000000')).toEqual({ hex: '#7eb8ff', alpha: 128 / 255 });
+    expect(parseColor('transparent', '#111111')).toEqual({ hex: '#111111', alpha: 0 });
+    expect(colorWithOpacity('#7eb8ff', 50)).toBe('#7eb8ff80');
+    expect(colorWithOpacity('#7eb8ff', 100)).toBe('#7eb8ff');
+    expect(colorWithOpacity('#7eb8ff', 0)).toBe('transparent');
+    expect(opacityPercent(undefined, 100)).toBe(100);
+    expect(opacityPercent(undefined, 0)).toBe(0);
+    expect(opacityPercent('#7eb8ff80', 100)).toBe(50);
+    expect(opacityPercent('transparent', 100)).toBe(0);
   });
 
   it('falls back to the default color when none is set', () => {
@@ -60,6 +79,47 @@ describe('colors', () => {
     });
     expect(parsed!.plan.objects[0].color).toBe('transparent');
     expect('borderColor' in parsed!.plan.objects[0]).toBe(false);
+    const alpha = parseProjectDocument({
+      kind: PROJECT_KIND,
+      formatVersion: 1,
+      plan: {
+        version: 1,
+        name: 'A',
+        objects: [
+          {
+            id: 'a',
+            kind: 'rect',
+            name: 'A',
+            x: 0,
+            y: 0,
+            width: 1,
+            depth: 1,
+            rotation: 0,
+            groupId: null,
+            color: '#ff000080',
+            borderColor: '#00ff0040',
+          },
+          {
+            id: 'b',
+            kind: 'rect',
+            name: 'B',
+            x: 0,
+            y: 0,
+            width: 1,
+            depth: 1,
+            rotation: 0,
+            groupId: null,
+            borderColor: '#00ff0000',
+          },
+        ],
+        measurements: [],
+        groups: [],
+        viewport: { panX: 0, panY: 0, zoom: 40 },
+      },
+    });
+    expect(alpha!.plan.objects[0].color).toBe('#ff000080');
+    expect(alpha!.plan.objects[0].borderColor).toBe('#00ff0040');
+    expect('borderColor' in alpha!.plan.objects[1]).toBe(false);
   });
 
   it('keeps a saved border color, drops invalid ones, and older saves have no border', () => {

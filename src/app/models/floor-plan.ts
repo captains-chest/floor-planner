@@ -100,25 +100,99 @@ export function normalizeColor(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined;
   }
-  const match = /^#([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(value.trim());
+  const match = /^#([0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})$/i.exec(value.trim());
   if (!match) {
     return undefined;
   }
-  const hex = match[1].toLowerCase();
-  return `#${hex.length === 3 ? hex.replace(/./g, '$&$&') : hex}`;
+  let hex = match[1].toLowerCase();
+  if (hex.length === 3 || hex.length === 4) {
+    hex = hex.replace(/./g, '$&$&');
+  }
+  // Fully opaque alpha collapses to plain #rrggbb so old solid colors stay identical.
+  return hex.length === 8 && hex.endsWith('ff') ? `#${hex.slice(0, 6)}` : `#${hex}`;
+}
+
+export interface ParsedColor {
+  hex: string;
+  /** 0 (fully transparent) to 1 (solid). */
+  alpha: number;
+}
+
+/** Splits a stored color (#rrggbb, #rrggbbaa or 'transparent') into hex + alpha. */
+export function parseColor(value: string | undefined, fallbackHex: string): ParsedColor {
+  if (value === 'transparent') {
+    return { hex: fallbackHex, alpha: 0 };
+  }
+  const normalized = normalizeColor(value);
+  if (!normalized) {
+    return { hex: fallbackHex, alpha: 1 };
+  }
+  if (normalized.length === 9) {
+    return { hex: normalized.slice(0, 7), alpha: parseInt(normalized.slice(7), 16) / 255 };
+  }
+  return { hex: normalized, alpha: 1 };
+}
+
+/** Combines a solid #rrggbb with an opacity percent into the stored form. */
+export function colorWithOpacity(hex: string, percent: number): string {
+  const base = normalizeColor(hex)?.slice(0, 7) ?? '#000000';
+  const pct = Math.min(100, Math.max(0, Math.round(percent)));
+  if (pct <= 0) {
+    return 'transparent';
+  }
+  if (pct >= 100) {
+    return base;
+  }
+  const alpha = Math.round((pct / 100) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `${base}${alpha}`;
+}
+
+/** Opacity percent of a stored color; fallback when no color is stored. */
+export function opacityPercent(value: string | undefined, fallback: number): number {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (value === 'transparent') {
+    return 0;
+  }
+  return Math.round(parseColor(value, '#000000').alpha * 100);
 }
 
 export const OBJECT_BORDER_COLOR = '#1a1d23';
 export const TRANSPARENT = 'transparent';
 export function objectBorderColor(obj: Pick<PlacedObject, 'borderColor'>): string {
-  return obj.borderColor ?? OBJECT_BORDER_COLOR;
+  return parseColor(obj.borderColor, OBJECT_BORDER_COLOR).hex;
 }
 /** Fill paint for an object: a #rrggbb color, or 'transparent' when it should render unfilled. */
 export function objectFill(obj: Pick<PlacedObject, 'kind' | 'color'>): string {
   return obj.color ?? OBJECT_COLORS[obj.kind];
 }
 export function objectColor(obj: Pick<PlacedObject, 'kind' | 'color'>): string {
-  return objectFill(obj) === TRANSPARENT ? OBJECT_COLORS[obj.kind] : objectFill(obj);
+  return parseColor(objectFill(obj), OBJECT_COLORS[obj.kind]).hex;
+}
+
+/** Canvas/export fill paint: 'none' at 0% opacity, otherwise hex + combined opacity. */
+export function fillPaint(obj: Pick<PlacedObject, 'kind' | 'color'>): {
+  fill: string;
+  opacity: number;
+} {
+  const parsed = parseColor(objectFill(obj), OBJECT_COLORS[obj.kind]);
+  return parsed.alpha <= 0
+    ? { fill: 'none', opacity: 0 }
+    : { fill: parsed.hex, opacity: parsed.alpha * 0.82 };
+}
+
+/** Canvas/export border paint, or null when the border is fully transparent. */
+export function borderPaint(
+  obj: Pick<PlacedObject, 'borderColor'>,
+): { stroke: string; opacity: number } | null {
+  if (!obj.borderColor) {
+    return null;
+  }
+  const parsed = parseColor(obj.borderColor, OBJECT_BORDER_COLOR);
+  return parsed.alpha <= 0 ? null : { stroke: parsed.hex, opacity: parsed.alpha };
 }
 
 export function measurementColor(item: Pick<Measurement, 'color'>): string {

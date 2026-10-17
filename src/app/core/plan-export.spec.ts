@@ -81,6 +81,19 @@ describe('renderPlanSvg', () => {
     expect(svg).toContain('stroke="none"');
   });
 
+  it('exports partial opacity as alpha on fill and border', () => {
+    const base = plan();
+    const faded = plan({
+      objects: [
+        { ...base.objects[0], color: '#ff000080', borderColor: '#0000ff40' },
+        base.objects[1],
+      ],
+    });
+    const svg = renderPlanSvg({ plan: faded, imageDataUrl: null, lengthUnit: 'm' }).svg;
+    expect(svg).toContain('fill="#ff0000" fill-opacity="0.4116"');
+    expect(svg).toContain('stroke="#0000ff" stroke-opacity="0.251"');
+  });
+
   it('escapes the plan name in the title and header', () => {
     const { svg } = renderPlanSvg({ plan: plan(), imageDataUrl: null, lengthUnit: 'm' });
     expect(svg).toContain('<title>Flat &lt;2nd&gt; &amp; &quot;loft&quot;</title>');
