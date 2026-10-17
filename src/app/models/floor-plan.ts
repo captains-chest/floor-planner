@@ -101,13 +101,24 @@ export interface Opening {
   color?: string;
 }
 export const DEFAULT_OPENING_COLOR = '#000000';
-/** Solid hex for an opening's stored color (black when unset or invalid). */
-export function openingColor(opening: Pick<Opening, 'color'>): string {
-  return parseColor(opening.color, DEFAULT_OPENING_COLOR).hex;
+/** Window default on the (dark) canvas: the near-white windows had before opening colors. */
+export const DEFAULT_WINDOW_COLOR = '#f5f7fa';
+const defaultOpeningHex = (opening: Pick<Opening, 'color' | 'kind'>): string =>
+  opening.kind === 'window' ? DEFAULT_WINDOW_COLOR : DEFAULT_OPENING_COLOR;
+/** Solid hex for an opening's stored color (door black / window near-white when unset). */
+export function openingColor(opening: Pick<Opening, 'color' | 'kind'>): string {
+  return parseColor(opening.color, defaultOpeningHex(opening)).hex;
 }
-/** Canvas/export paint for an opening: 'none' at 0% opacity, otherwise hex + opacity. */
-export function openingPaint(opening: Pick<Opening, 'color'>): { stroke: string; opacity: number } {
-  const parsed = parseColor(opening.color, DEFAULT_OPENING_COLOR);
+/**
+ * Canvas/export paint for an opening: 'none' at 0% opacity, otherwise hex + opacity.
+ * `fallbackHex` lets the light-on-white export substitute its print ink for the
+ * canvas default (windows were ink-coloured in exports before opening colors).
+ */
+export function openingPaint(
+  opening: Pick<Opening, 'color' | 'kind'>,
+  fallbackHex: string = defaultOpeningHex(opening),
+): { stroke: string; opacity: number } {
+  const parsed = parseColor(opening.color, fallbackHex);
   return parsed.alpha <= 0
     ? { stroke: 'none', opacity: 0 }
     : { stroke: parsed.hex, opacity: parsed.alpha };

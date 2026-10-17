@@ -592,7 +592,10 @@ export class Inspector {
       this.store.updateOpening(id, { color: colorWithOpacity(color, pct > 0 ? pct : 100) });
     }
   }
-  protected setOpeningOpacity(opening: { id: string; color?: string }, event: Event): void {
+  protected setOpeningOpacity(
+    opening: { id: string; kind: 'door' | 'window'; color?: string },
+    event: Event,
+  ): void {
     const pct = this.numberValue(event);
     this.store.updateOpening(opening.id, { color: colorWithOpacity(openingColor(opening), pct) });
   }

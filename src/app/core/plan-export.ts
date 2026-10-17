@@ -168,7 +168,7 @@ function wallSvg(wall: Wall, openings: Opening[]): string {
     .join('');
 }
 function openingSvg(o: Opening, hairline: number): string {
-  const paint = openingPaint(o);
+  const paint = openingPaint(o, o.kind === 'window' ? INK : '#000000');
   if (paint.stroke === 'none') return '';
   const w = o.width,
     h = w / 2,

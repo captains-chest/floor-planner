@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { createDefaultPlan, Opening, PlacedObject, Wall } from '../models/floor-plan';
+import {
+  createDefaultPlan,
+  Opening,
+  openingColor,
+  openingPaint,
+  PlacedObject,
+  Wall,
+} from '../models/floor-plan';
 import { parseProjectDocument, PROJECT_KIND } from './persistence';
 import { PlanEdit } from './plan-edit';
 import { renderPlanSvg } from './plan-export';
@@ -247,6 +254,41 @@ describe('openings persistence and edit', () => {
       lengthUnit: 'm',
     }).svg;
     expect(plain).toContain('stroke="#000000" stroke-opacity="1"');
+    // An uncolored window keeps its pre-color export default (print ink), not black-by-kind.
+    const plainWindow = renderPlanSvg({
+      plan: {
+        ...plan,
+        openings: [
+          {
+            id: 'win',
+            kind: 'window' as const,
+            center: { x: 3, y: 3 },
+            width: 1.2,
+            rotation: 0,
+            wallId: null,
+          },
+        ],
+      },
+      imageDataUrl: null,
+      lengthUnit: 'm',
+    }).svg;
+    expect(plainWindow).toContain('stroke="#1a1d23"');
+  });
+  it('defaults doors to black and windows to near-white when no color is stored', () => {
+    const base = { center: { x: 0, y: 0 }, width: 1, rotation: 0 };
+    expect(openingPaint({ ...base, kind: 'door' })).toEqual({ stroke: '#000000', opacity: 1 });
+    expect(openingPaint({ ...base, kind: 'window' })).toEqual({ stroke: '#f5f7fa', opacity: 1 });
+    expect(openingColor({ ...base, kind: 'door' })).toBe('#000000');
+    expect(openingColor({ ...base, kind: 'window' })).toBe('#f5f7fa');
+    // An explicit color still wins for both kinds, and transparent stays transparent.
+    expect(openingPaint({ ...base, kind: 'window', color: '#00cc44' })).toEqual({
+      stroke: '#00cc44',
+      opacity: 1,
+    });
+    expect(openingPaint({ ...base, kind: 'window', color: 'transparent' })).toEqual({
+      stroke: 'none',
+      opacity: 0,
+    });
   });
   it('persists a valid opening color and drops an invalid one', () => {
     const parsed = parseProjectDocument({
