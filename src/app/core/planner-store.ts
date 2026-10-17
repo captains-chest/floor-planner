@@ -13,7 +13,13 @@ import {
   Viewport,
 } from '../models/floor-plan';
 import { type Hit } from './geometry';
-import { furnitureById, furnitureObjectName, placementSpot } from './furniture';
+import {
+  CUPBOARD_DOOR_ID,
+  cupboardDoorPlacement,
+  furnitureById,
+  furnitureObjectName,
+  placementSpot,
+} from './furniture';
 import { renderPlanSvg, type RenderedPlan } from './plan-export';
 import { measureImage, readFileAsDataUrl } from './image';
 import { parseProjectDocument, Persistence, serializeProject } from './persistence';
@@ -327,6 +333,24 @@ export class PlannerStore {
     const centerY = panY + this.#viewSize.height / zoom / 2;
     const name = furnitureObjectName(item, this.#plan());
     const spot = placementSpot(item, { x: centerX, y: centerY }, this.#plan());
+    if (item.id === CUPBOARD_DOOR_ID) {
+      // One undo step for the cupboard plus its door (placed, then grouped by the gesture).
+      this.#edit.beginEdit();
+      const placed = this.#edit.addObject(item.kind, spot.x, spot.y, item.width, item.depth, name);
+      const door = cupboardDoorPlacement(placed.object);
+      this.#edit.addOpening('door', door.center, {
+        width: door.width,
+        rotation: door.rotation,
+        wallId: null,
+        flipV: true,
+      });
+      this.#edit.endEdit();
+      this.#sync();
+      this.#selection.set({ type: 'object', id: placed.object.id });
+      this.setTool('select');
+      this.#status.set(`Added ${name}. Drag to move, or set its size in Properties.`);
+      return placed.object;
+    }
     const result = this.#edit.addObject(item.kind, spot.x, spot.y, item.width, item.depth, name);
     this.#sync();
     this.#selection.set({ type: 'object', id: result.object.id });
@@ -415,7 +439,13 @@ export class PlannerStore {
   addOpening(
     kind: OpeningKind,
     center: Point,
-    opts: { width?: number; rotation?: number; wallId?: string | null } = {},
+    opts: {
+      width?: number;
+      rotation?: number;
+      wallId?: string | null;
+      flipH?: boolean;
+      flipV?: boolean;
+    } = {},
   ): Opening {
     const result = this.#edit.addOpening(kind, center, opts);
     this.#sync();
