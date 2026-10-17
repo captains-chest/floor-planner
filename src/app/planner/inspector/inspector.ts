@@ -17,6 +17,7 @@ import {
   formatLength,
   inputMin,
   inputStep,
+  roundMetersForDisplay,
 } from '../../core/units';
 import { StackOrder } from './stack-order/stack-order';
 
@@ -668,7 +669,10 @@ export class Inspector {
   }
 
   protected lengthValue(event: Event): number {
-    return displayToMeters(this.numberValue(event), this.store.lengthUnit());
+    const unit = this.store.lengthUnit();
+    // Store exactly the precision the field displays (0.1 cm / 0.001 m), so stepped
+    // and typed values never accumulate binary-float tails like 22.100000000000001.
+    return roundMetersForDisplay(displayToMeters(this.numberValue(event), unit), unit);
   }
 
   protected renameGroup(id: string, event: Event): void {

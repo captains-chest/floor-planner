@@ -300,6 +300,36 @@ export function moveWallEndpoint(
   );
 }
 
+export interface ConnectedWallEnd {
+  id: string;
+  end: 'start' | 'end';
+}
+
+/**
+ * Every wall end coincident with the given wall's end, including that wall itself.
+ * Walls connect by sharing exact points through snapping, so coincidence within a
+ * tiny epsilon is the connection; no separate connection record is kept.
+ */
+export function connectedWallEnds(
+  walls: readonly Wall[],
+  wallId: string,
+  end: 'start' | 'end',
+  epsilon = 1e-6,
+): ConnectedWallEnd[] {
+  const wall = walls.find((w) => w.id === wallId);
+  if (!wall || wall.points.length === 0) return [];
+  const point = end === 'start' ? wall.points[0] : wall.points[wall.points.length - 1];
+  const connected: ConnectedWallEnd[] = [];
+  for (const other of walls) {
+    if (other.points.length === 0) continue;
+    if (dist(point, other.points[0]) <= epsilon) connected.push({ id: other.id, end: 'start' });
+    if (other.points.length > 1 && dist(point, other.points[other.points.length - 1]) <= epsilon) {
+      connected.push({ id: other.id, end: 'end' });
+    }
+  }
+  return connected;
+}
+
 export function pointInRect(p: Point, x: number, y: number, width: number, depth: number): boolean {
   return p.x >= x && p.x <= x + width && p.y >= y && p.y <= y + depth;
 }

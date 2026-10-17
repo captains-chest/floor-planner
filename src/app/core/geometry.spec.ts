@@ -6,6 +6,7 @@ import {
   measurementLine,
   offsetSegment,
   signedPerpendicularOffset,
+  connectedWallEnds,
   moveWallEndpoint,
   snapWallPoint,
   snapWallTranslation,
@@ -219,6 +220,56 @@ describe('wall endpoint editing', () => {
     // Without the wall selected, the same clicks hit the wall body as before.
     const noWall = { objects: [], measurementId: null };
     expect(hitTest(plan, { x: 0.05, y: 0 }, 100, noWall)).toEqual({ type: 'wall', id: 'w1' });
+  });
+});
+
+describe('connectedWallEnds', () => {
+  const walls = [
+    {
+      id: 'w1',
+      points: [
+        { x: 0, y: 0 },
+        { x: 2, y: 0 },
+      ],
+      thickness: 0.15,
+    },
+    {
+      id: 'w2',
+      points: [
+        { x: 2, y: 0 },
+        { x: 2, y: 2 },
+      ],
+      thickness: 0.15,
+    },
+    // Legacy multi-segment wall whose end also lands on the shared corner.
+    {
+      id: 'w3',
+      points: [
+        { x: 5, y: 5 },
+        { x: 5, y: 0 },
+        { x: 2, y: 0 },
+      ],
+      thickness: 0.15,
+    },
+    {
+      id: 'w4',
+      points: [
+        { x: 9, y: 9 },
+        { x: 10, y: 9 },
+      ],
+      thickness: 0.15,
+    },
+  ];
+  it('finds every wall end sharing the corner, across separate and multi-segment walls', () => {
+    expect(connectedWallEnds(walls, 'w1', 'end')).toEqual([
+      { id: 'w1', end: 'end' },
+      { id: 'w2', end: 'start' },
+      { id: 'w3', end: 'end' },
+    ]);
+  });
+  it('returns only the wall itself for an unconnected end', () => {
+    expect(connectedWallEnds(walls, 'w4', 'start')).toEqual([{ id: 'w4', end: 'start' }]);
+    expect(connectedWallEnds(walls, 'missing', 'start')).toEqual([]);
   });
 });
 

@@ -441,6 +441,11 @@ export class PlannerStore {
     this.#sync();
   }
 
+  moveConnectedWallEndpoint(id: string, end: 'start' | 'end', target: Point): void {
+    this.#edit.moveConnectedWallEndpoint(id, end, target);
+    this.#sync();
+  }
+
   addOpening(
     kind: OpeningKind,
     center: Point,

@@ -139,6 +139,116 @@ describe('PlanEdit', () => {
   });
 });
 
+describe('connected wall ends', () => {
+  const planWithCorner = () => {
+    const edit = new PlanEdit();
+    edit.hydrate(
+      {
+        ...edit.plan,
+        walls: [
+          {
+            id: 'w1',
+            points: [
+              { x: 0, y: 0 },
+              { x: 2, y: 0 },
+            ],
+            thickness: 0.15,
+          },
+          {
+            id: 'w2',
+            points: [
+              { x: 2, y: 0 },
+              { x: 2, y: 2 },
+            ],
+            thickness: 0.15,
+          },
+          {
+            id: 'w3',
+            points: [
+              { x: 5, y: 5 },
+              { x: 6, y: 5 },
+            ],
+            thickness: 0.15,
+          },
+        ],
+        openings: [
+          {
+            id: 'd1',
+            kind: 'door' as const,
+            center: { x: 1, y: 0 },
+            width: 0.9,
+            rotation: 0,
+            wallId: 'w1',
+          },
+          {
+            id: 'd2',
+            kind: 'door' as const,
+            center: { x: 2, y: 1 },
+            width: 0.9,
+            rotation: 90,
+            wallId: 'w2',
+          },
+        ],
+      },
+      null,
+    );
+    return edit;
+  };
+
+  it('drags a shared corner: both wall ends land together, openings follow, one undo restores all', () => {
+    const edit = planWithCorner();
+    edit.beginEdit();
+    const moved = edit.moveConnectedWallEndpoint('w1', 'end', { x: 3, y: 1 });
+    edit.endEdit();
+    expect(moved).toEqual([
+      { id: 'w1', end: 'end' },
+      { id: 'w2', end: 'start' },
+    ]);
+    const w1 = edit.plan.walls.find((w) => w.id === 'w1')!;
+    const w2 = edit.plan.walls.find((w) => w.id === 'w2')!;
+    const w3 = edit.plan.walls.find((w) => w.id === 'w3')!;
+    expect(w1.points).toEqual([
+      { x: 0, y: 0 },
+      { x: 3, y: 1 },
+    ]);
+    expect(w2.points).toEqual([
+      { x: 3, y: 1 },
+      { x: 2, y: 2 },
+    ]);
+    expect(w3.points).toEqual([
+      { x: 5, y: 5 },
+      { x: 6, y: 5 },
+    ]);
+    // Doors keep their halfway place along each moved wall.
+    expect(edit.plan.openings[0].center).toEqual({ x: 1.5, y: 0.5 });
+    expect(edit.plan.openings[1].center).toEqual({ x: 2.5, y: 1.5 });
+    expect(edit.undo()).toBe(true);
+    expect(edit.plan.walls.find((w) => w.id === 'w1')!.points).toEqual([
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    expect(edit.plan.walls.find((w) => w.id === 'w2')!.points).toEqual([
+      { x: 2, y: 0 },
+      { x: 2, y: 2 },
+    ]);
+    expect(edit.plan.openings[0].center).toEqual({ x: 1, y: 0 });
+    expect(edit.canUndo).toBe(false);
+  });
+
+  it('drags an unconnected end without touching other walls', () => {
+    const edit = planWithCorner();
+    edit.moveConnectedWallEndpoint('w1', 'start', { x: -1, y: 0 });
+    expect(edit.plan.walls.find((w) => w.id === 'w1')!.points).toEqual([
+      { x: -1, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    expect(edit.plan.walls.find((w) => w.id === 'w2')!.points).toEqual([
+      { x: 2, y: 0 },
+      { x: 2, y: 2 },
+    ]);
+  });
+});
+
 describe('walls', () => {
   it('places one straight wall per placement; the next placement is a separate wall', () => {
     const edit = new PlanEdit();

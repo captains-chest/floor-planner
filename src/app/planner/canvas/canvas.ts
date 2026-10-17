@@ -30,7 +30,7 @@ import {
   linePointToMeasured,
   measurementLine,
   midpoint,
-  moveWallEndpoint,
+  connectedWallEnds,
   normalizeRect,
   objectCenter,
   rotatedObjectPose,
@@ -1713,16 +1713,18 @@ export class Canvas {
           SNAP_PIXELS / this.zoom(),
           true,
         ).point;
-        target = this.wallSnapPoint(target, false, drag.id);
+        // Connected ends move as one corner, so the whole group is excluded from snapping.
+        const groupIds = connectedWallEnds(this.store.plan().walls ?? [], drag.id, drag.end).map(
+          (ref) => ref.id,
+        );
+        target = this.wallSnapPoint(target, false, groupIds);
       }
       const neighbour =
         drag.end === 'start' ? drag.origPoints[1] : drag.origPoints[drag.origPoints.length - 2];
       if (neighbour) {
         target = this.constrainOrthoPoint(neighbour, target, alt);
       }
-      this.store.updateWall(drag.id, {
-        points: moveWallEndpoint(drag.origPoints, drag.end, target),
-      });
+      this.store.moveConnectedWallEndpoint(drag.id, drag.end, target);
       return;
     }
     if (drag.type === 'move-measurement') {
@@ -1827,13 +1829,20 @@ export class Canvas {
   }
 
   /** Snaps a wall-drawing point to existing walls (endpoints first, then segments). */
-  protected wallSnapPoint(point: Point, shift: boolean, excludeWallId?: string): Point {
+  protected wallSnapPoint(
+    point: Point,
+    shift: boolean,
+    excludeWallIds?: string | readonly string[],
+  ): Point {
     if (shift) return { ...point };
     const plan = this.store.plan();
     const draft = this.wallDraft();
     const draftSegments: [Point, Point][] = [];
     for (let i = 1; i < draft.length; i++) draftSegments.push([draft[i - 1], draft[i]]);
-    const walls = (plan.walls ?? []).filter((w) => w.id !== excludeWallId);
+    const excluded = new Set(
+      typeof excludeWallIds === 'string' ? [excludeWallIds] : excludeWallIds,
+    );
+    const walls = (plan.walls ?? []).filter((w) => !excluded.has(w.id));
     return snapWallPoint(point, walls, SNAP_PIXELS / this.zoom(), true, draftSegments).point;
   }
 

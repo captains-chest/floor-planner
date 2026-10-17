@@ -19,7 +19,16 @@ import {
   clampWallThickness,
   DEFAULT_WALL_THICKNESS,
 } from '../models/floor-plan';
-import { clamp, contentBBox, dist, scalePoint, wallSegments } from './geometry';
+import {
+  clamp,
+  connectedWallEnds,
+  type ConnectedWallEnd,
+  contentBBox,
+  dist,
+  moveWallEndpoint,
+  scalePoint,
+  wallSegments,
+} from './geometry';
 import { followAttachedOpenings, objectEdgeSegments } from './openings';
 import { selectionFromObjectIds, selectedPlacedObjects } from './selection';
 
@@ -551,6 +560,38 @@ export class PlanEdit {
         new Map([[`wall:${id}`, wallSegments(after)]]),
       );
     }
+  }
+
+  /**
+   * Moves a wall end together with every wall end coincident with it, so connected
+   * walls stay joined at their shared corner. One call is one undo step, and
+   * openings attached to any moved wall follow.
+   */
+  moveConnectedWallEndpoint(id: string, end: 'start' | 'end', target: Point): ConnectedWallEnd[] {
+    const connected = connectedWallEnds(this.#plan.walls ?? [], id, end);
+    if (connected.length === 0) return [];
+    this.#record();
+    const endsByWall = new Map<string, Set<'start' | 'end'>>();
+    for (const ref of connected) {
+      const ends = endsByWall.get(ref.id) ?? new Set<'start' | 'end'>();
+      ends.add(ref.end);
+      endsByWall.set(ref.id, ends);
+    }
+    const hostsBefore = new Map<string, [Point, Point][]>();
+    const hostsAfter = new Map<string, [Point, Point][]>();
+    const walls = (this.#plan.walls ?? []).map((wall) => {
+      const ends = endsByWall.get(wall.id);
+      if (!ends) return wall;
+      hostsBefore.set(`wall:${wall.id}`, wallSegments(wall));
+      let points = wall.points.map((pt) => ({ ...pt }));
+      for (const which of ends) points = moveWallEndpoint(points, which, target);
+      const next = { ...wall, points };
+      hostsAfter.set(`wall:${wall.id}`, wallSegments(next));
+      return next;
+    });
+    this.#plan = { ...this.#plan, walls };
+    this.#followHosts(hostsBefore, hostsAfter);
+    return connected;
   }
 
   /** Moves openings attached to changed hosts so they keep their place along the host. */
