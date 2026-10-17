@@ -1,6 +1,13 @@
 import { Component, inject } from '@angular/core';
 import { dist } from '../../core/geometry';
-import { measurementColor, normalizeColor, objectColor } from '../../models/floor-plan';
+import {
+  measurementColor,
+  normalizeColor,
+  objectBorderColor,
+  colorWithOpacity,
+  objectColor,
+  opacityPercent,
+} from '../../models/floor-plan';
 import { PlannerStore } from '../../core/planner-store';
 import {
   displayToMeters,
@@ -90,6 +97,43 @@ import { StackOrder } from './stack-order/stack-order';
 
     .color-row .action {
       width: auto;
+    }
+
+    .transparent {
+      flex: none;
+      width: 2.25rem;
+      height: 2.25rem;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      background: repeating-conic-gradient(#c9d1d9 0% 25%, #ffffff 0% 50%) 0 0 / 12px 12px;
+    }
+
+    .transparent[aria-pressed='true'] {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    .opacity-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .opacity-row input[type='range'] {
+      flex: 1;
+      padding: 0;
+      border: none;
+      background: transparent;
+    }
+
+    .opacity-row output {
+      min-width: 2.6em;
+      text-align: right;
+      color: var(--text);
     }
 
     .row {
@@ -214,9 +258,19 @@ import { StackOrder } from './stack-order/stack-order';
             id="object-color"
             type="color"
             [value]="objectColor(obj)"
-            (change)="setObjectColor(obj.id, $event)"
+            (focus)="store.beginEdit()"
+            (input)="setObjectColor(obj.id, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
           />
-          @if (obj.color) {
+          <button
+            type="button"
+            class="transparent"
+            aria-label="Transparent fill color"
+            [attr.aria-pressed]="fillOpacity(obj) === 0"
+            (click)="setFillTransparent(obj.id)"
+          ></button>
+          @if (obj.color && obj.color !== 'transparent') {
             <button
               type="button"
               class="action"
@@ -225,6 +279,59 @@ import { StackOrder } from './stack-order/stack-order';
               Reset color
             </button>
           }
+        </div>
+        <div class="opacity-row">
+          <label for="object-fill-opacity">Fill opacity</label>
+          <input
+            id="object-fill-opacity"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            [value]="fillOpacity(obj)"
+            [attr.aria-valuetext]="fillOpacity(obj) + '%'"
+            (focus)="store.beginEdit()"
+            (input)="setFillOpacity(obj, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <output for="object-fill-opacity">{{ fillOpacity(obj) }}%</output>
+        </div>
+        <div class="color-row">
+          <label for="object-border-color">Border color</label>
+          <input
+            id="object-border-color"
+            type="color"
+            [value]="objectBorderColor(obj)"
+            (focus)="store.beginEdit()"
+            (input)="setObjectBorderColor(obj.id, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <button
+            type="button"
+            class="transparent"
+            aria-label="Transparent border color (no border)"
+            [attr.aria-pressed]="borderOpacity(obj) === 0"
+            (click)="setBorderTransparent(obj.id)"
+          ></button>
+        </div>
+        <div class="opacity-row">
+          <label for="object-border-opacity">Border opacity</label>
+          <input
+            id="object-border-opacity"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            [value]="borderOpacity(obj)"
+            [attr.aria-valuetext]="borderOpacity(obj) + '%'"
+            (focus)="store.beginEdit()"
+            (input)="setBorderOpacity(obj, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <output for="object-border-opacity">{{ borderOpacity(obj) }}%</output>
         </div>
         <button type="button" class="action" (click)="store.copySelection()">Copy object</button>
         <app-stack-order />
@@ -243,7 +350,9 @@ import { StackOrder } from './stack-order/stack-order';
             id="measurement-color"
             type="color"
             [value]="measurementColor(measurement)"
-            (change)="setMeasurementColor(measurement.id, $event)"
+            (focus)="store.beginEdit()"
+            (input)="setMeasurementColor(measurement.id, $event)"
+            (change)="store.endEdit()"
           />
           @if (measurement.color) {
             <button
@@ -271,12 +380,54 @@ export class Inspector {
   protected readonly dist = dist;
   protected readonly abs = Math.abs;
   protected readonly objectColor = objectColor;
+  protected readonly objectBorderColor = objectBorderColor;
   protected readonly measurementColor = measurementColor;
 
+  protected fillOpacity(obj: { color?: string }): number {
+    return opacityPercent(obj.color, 100);
+  }
+  protected borderOpacity(obj: { borderColor?: string }): number {
+    return opacityPercent(obj.borderColor, 0);
+  }
+  protected setFillOpacity(
+    obj: { id: string; kind: 'rect' | 'circle' | 'ellipse'; color?: string },
+    event: Event,
+  ): void {
+    const pct = this.numberValue(event);
+    this.store.updateObject(obj.id, { color: colorWithOpacity(objectColor(obj), pct) });
+  }
+  protected setBorderOpacity(obj: { id: string; borderColor?: string }, event: Event): void {
+    const pct = this.numberValue(event);
+    if (pct <= 0) {
+      this.store.updateObject(obj.id, { borderColor: undefined });
+    } else {
+      this.store.updateObject(obj.id, {
+        borderColor: colorWithOpacity(objectBorderColor(obj), pct),
+      });
+    }
+  }
+  protected setFillTransparent(id: string): void {
+    this.store.updateObject(id, { color: 'transparent' });
+    this.store.endEdit();
+  }
+  protected setBorderTransparent(id: string): void {
+    this.store.updateObject(id, { borderColor: undefined });
+    this.store.endEdit();
+  }
+  protected setObjectBorderColor(id: string, event: Event): void {
+    const color = normalizeColor(this.inputValue(event));
+    const obj = this.store.selectedObject();
+    if (color && obj) {
+      const pct = this.borderOpacity(obj);
+      this.store.updateObject(id, { borderColor: colorWithOpacity(color, pct > 0 ? pct : 100) });
+    }
+  }
   protected setObjectColor(id: string, event: Event): void {
     const color = normalizeColor(this.inputValue(event));
-    if (color) {
-      this.store.updateObject(id, { color });
+    const obj = this.store.selectedObject();
+    if (color && obj) {
+      const pct = this.fillOpacity(obj);
+      this.store.updateObject(id, { color: colorWithOpacity(color, pct > 0 ? pct : 100) });
     }
   }
 

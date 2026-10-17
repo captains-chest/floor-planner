@@ -59,6 +59,41 @@ describe('renderPlanSvg', () => {
     expect(plain).toContain('stroke="#0f7a68"');
   });
 
+  it('uses a custom object border in export, subtle hairline otherwise', () => {
+    const base = plan();
+    const bordered = plan({
+      objects: [{ ...base.objects[0], borderColor: '#ff00aa' }, base.objects[1]],
+    });
+    const svg = renderPlanSvg({ plan: bordered, imageDataUrl: null, lengthUnit: 'm' }).svg;
+    expect(svg).toContain('stroke="#ff00aa"');
+    const plain = renderPlanSvg({ plan: base, imageDataUrl: null, lengthUnit: 'm' }).svg;
+    expect(plain).not.toContain('stroke="#ff00aa"');
+    expect(plain).toContain('stroke="none"');
+  });
+
+  it('exports transparent fill as no fill and no border stroke by default', () => {
+    const base = plan();
+    const clear = plan({
+      objects: [{ ...base.objects[0], color: 'transparent' }, base.objects[1]],
+    });
+    const svg = renderPlanSvg({ plan: clear, imageDataUrl: null, lengthUnit: 'm' }).svg;
+    expect(svg).toContain('fill="none"');
+    expect(svg).toContain('stroke="none"');
+  });
+
+  it('exports partial opacity as alpha on fill and border', () => {
+    const base = plan();
+    const faded = plan({
+      objects: [
+        { ...base.objects[0], color: '#ff000080', borderColor: '#0000ff40' },
+        base.objects[1],
+      ],
+    });
+    const svg = renderPlanSvg({ plan: faded, imageDataUrl: null, lengthUnit: 'm' }).svg;
+    expect(svg).toContain('fill="#ff0000" fill-opacity="0.4116"');
+    expect(svg).toContain('stroke="#0000ff" stroke-opacity="0.251"');
+  });
+
   it('escapes the plan name in the title and header', () => {
     const { svg } = renderPlanSvg({ plan: plan(), imageDataUrl: null, lengthUnit: 'm' });
     expect(svg).toContain('<title>Flat &lt;2nd&gt; &amp; &quot;loft&quot;</title>');

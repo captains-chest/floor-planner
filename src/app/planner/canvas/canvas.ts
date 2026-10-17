@@ -11,7 +11,8 @@ import {
   viewChild,
 } from '@angular/core';
 import {
-  objectColor,
+  borderPaint,
+  fillPaint,
   measurementColor,
   PlacedObject,
   Point,
@@ -272,10 +273,10 @@ type DragState =
                 [attr.width]="item.obj.width"
                 [attr.height]="item.obj.depth"
                 [attr.fill]="item.fill"
-                fill-opacity="0.82"
-                stroke="#0d1117"
-                stroke-opacity="0.35"
-                stroke-width="1"
+                [attr.fill-opacity]="item.fillOpacity"
+                [attr.stroke]="item.border ?? 'none'"
+                [attr.stroke-opacity]="item.borderOpacity"
+                [attr.stroke-width]="item.border ? 3 : 0"
                 vector-effect="non-scaling-stroke"
               />
             } @else {
@@ -285,10 +286,10 @@ type DragState =
                 [attr.rx]="item.obj.width / 2"
                 [attr.ry]="item.obj.depth / 2"
                 [attr.fill]="item.fill"
-                fill-opacity="0.82"
-                stroke="#0d1117"
-                stroke-opacity="0.35"
-                stroke-width="1"
+                [attr.fill-opacity]="item.fillOpacity"
+                [attr.stroke]="item.border ?? 'none'"
+                [attr.stroke-opacity]="item.borderOpacity"
+                [attr.stroke-width]="item.border ? 3 : 0"
                 vector-effect="non-scaling-stroke"
               />
             }
@@ -714,10 +715,17 @@ export class Canvas {
   });
 
   protected readonly drawList = computed(() =>
-    this.store.plan().objects.map((obj) => ({
-      obj,
-      fill: objectColor(obj),
-    })),
+    this.store.plan().objects.map((obj) => {
+      const fill = fillPaint(obj);
+      const border = borderPaint(obj);
+      return {
+        obj,
+        fill: fill.fill,
+        fillOpacity: fill.opacity,
+        border: border?.stroke ?? null,
+        borderOpacity: border?.opacity ?? 0,
+      };
+    }),
   );
 
   protected readonly isEmpty = computed(() => {
