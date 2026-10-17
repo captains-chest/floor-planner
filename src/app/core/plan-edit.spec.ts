@@ -41,6 +41,20 @@ describe('PlanEdit', () => {
     expect(edit.plan.objects[4].x).toBeCloseTo(0.5);
   });
 
+  it('groups a live color-picking gesture into one undo step', () => {
+    const edit = new PlanEdit();
+    edit.hydrate({ ...edit.plan, objects: [place({ id: 'a', x: 0, y: 0 })] }, null);
+    edit.beginEdit();
+    edit.updateObject('a', { color: '#111111' });
+    edit.updateObject('a', { color: '#222222', borderColor: '#333333' });
+    edit.endEdit();
+    expect(edit.plan.objects[0].color).toBe('#222222');
+    expect(edit.undo()).toBe(true);
+    expect(edit.plan.objects[0].color).toBeUndefined();
+    expect(edit.plan.objects[0].borderColor).toBeUndefined();
+    expect(edit.canUndo).toBe(false);
+  });
+
   it('restacks objects in the plan order', () => {
     const edit = new PlanEdit();
     edit.hydrate(

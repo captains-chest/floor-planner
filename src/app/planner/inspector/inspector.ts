@@ -219,7 +219,9 @@ import { StackOrder } from './stack-order/stack-order';
             id="object-color"
             type="color"
             [value]="objectColor(obj)"
-            (change)="setObjectColor(obj.id, $event)"
+            (focus)="store.beginEdit()"
+            (input)="setObjectColor(obj.id, $event)"
+            (change)="store.endEdit()"
           />
           @if (obj.color) {
             <button
@@ -245,7 +247,9 @@ import { StackOrder } from './stack-order/stack-order';
             type="color"
             [value]="objectBorderColor(obj)"
             [disabled]="!obj.borderColor"
-            (change)="setObjectBorderColor(obj.id, $event)"
+            (focus)="store.beginEdit()"
+            (input)="setObjectBorderColor(obj.id, $event)"
+            (change)="store.endEdit()"
           />
         </div>
         <button type="button" class="action" (click)="store.copySelection()">Copy object</button>
@@ -265,7 +269,9 @@ import { StackOrder } from './stack-order/stack-order';
             id="measurement-color"
             type="color"
             [value]="measurementColor(measurement)"
-            (change)="setMeasurementColor(measurement.id, $event)"
+            (focus)="store.beginEdit()"
+            (input)="setMeasurementColor(measurement.id, $event)"
+            (change)="store.endEdit()"
           />
           @if (measurement.color) {
             <button
