@@ -47,12 +47,35 @@ export const TOOL_GUIDES = {
     summary: 'Drag to draw an ellipse.',
     tips: [],
   }),
+  wall: guide('wall', {
+    label: 'Wall',
+    shortcut: 'W',
+    summary: 'Click the start, then the end, for one straight wall. Snaps to other walls.',
+    tips: [
+      { keys: ['Alt', '⌥'], text: 'locks to 90°' },
+      { keys: ['Shift'], text: 'turns snap off' },
+      { keys: ['Enter'], text: 'stops placing walls' },
+    ],
+  }),
+  door: guide('door', {
+    label: 'Door',
+    shortcut: 'D',
+    summary: 'Click to place a door. Snaps to walls and edges.',
+    tips: [{ keys: ['Shift'], text: 'turns snap off' }],
+  }),
+  window: guide('window', {
+    label: 'Window',
+    shortcut: 'N',
+    summary: 'Click to place a window. Snaps to walls and edges.',
+    tips: [{ keys: ['Shift'], text: 'turns snap off' }],
+  }),
 } as const satisfies Record<ToolbarTool, ToolGuide>;
 
 export const TOOL_GROUPS: readonly ToolGroup[] = [
   { name: 'Navigate', tools: [TOOL_GUIDES.select, TOOL_GUIDES.pan] },
   { name: 'Measure', tools: [TOOL_GUIDES.measure] },
   { name: 'Objects', tools: [TOOL_GUIDES.rect, TOOL_GUIDES.circle, TOOL_GUIDES.ellipse] },
+  { name: 'Structure', tools: [TOOL_GUIDES.wall, TOOL_GUIDES.door, TOOL_GUIDES.window] },
 ];
 
 const TOOL_GUIDE_LIST: readonly ToolGuide[] = Object.values(TOOL_GUIDES);

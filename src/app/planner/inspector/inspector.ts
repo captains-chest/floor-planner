@@ -1,6 +1,15 @@
 import { Component, inject } from '@angular/core';
-import { dist } from '../../core/geometry';
-import { measurementColor, normalizeColor, objectColor } from '../../models/floor-plan';
+import { dist, wallLength } from '../../core/geometry';
+import {
+  measurementColor,
+  normalizeColor,
+  objectBorderColor,
+  colorWithOpacity,
+  objectColor,
+  opacityPercent,
+  openingColor,
+  wallColor,
+} from '../../models/floor-plan';
 import { PlannerStore } from '../../core/planner-store';
 import {
   displayToMeters,
@@ -8,6 +17,7 @@ import {
   formatLength,
   inputMin,
   inputStep,
+  roundMetersForDisplay,
 } from '../../core/units';
 import { StackOrder } from './stack-order/stack-order';
 
@@ -90,6 +100,43 @@ import { StackOrder } from './stack-order/stack-order';
 
     .color-row .action {
       width: auto;
+    }
+
+    .transparent {
+      flex: none;
+      width: 2.25rem;
+      height: 2.25rem;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      background: repeating-conic-gradient(#c9d1d9 0% 25%, #ffffff 0% 50%) 0 0 / 12px 12px;
+    }
+
+    .transparent[aria-pressed='true'] {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
+    .opacity-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .opacity-row input[type='range'] {
+      flex: 1;
+      padding: 0;
+      border: none;
+      background: transparent;
+    }
+
+    .opacity-row output {
+      min-width: 2.6em;
+      text-align: right;
+      color: var(--text);
     }
 
     .row {
@@ -214,9 +261,19 @@ import { StackOrder } from './stack-order/stack-order';
             id="object-color"
             type="color"
             [value]="objectColor(obj)"
-            (change)="setObjectColor(obj.id, $event)"
+            (focus)="store.beginEdit()"
+            (input)="setObjectColor(obj.id, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
           />
-          @if (obj.color) {
+          <button
+            type="button"
+            class="transparent"
+            aria-label="Transparent fill color"
+            [attr.aria-pressed]="fillOpacity(obj) === 0"
+            (click)="setFillTransparent(obj.id)"
+          ></button>
+          @if (obj.color && obj.color !== 'transparent') {
             <button
               type="button"
               class="action"
@@ -226,10 +283,217 @@ import { StackOrder } from './stack-order/stack-order';
             </button>
           }
         </div>
+        <div class="opacity-row">
+          <label for="object-fill-opacity">Fill opacity</label>
+          <input
+            id="object-fill-opacity"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            [value]="fillOpacity(obj)"
+            [attr.aria-valuetext]="fillOpacity(obj) + '%'"
+            (focus)="store.beginEdit()"
+            (input)="setFillOpacity(obj, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <output for="object-fill-opacity">{{ fillOpacity(obj) }}%</output>
+        </div>
+        <div class="color-row">
+          <label for="object-border-color">Border color</label>
+          <input
+            id="object-border-color"
+            type="color"
+            [value]="objectBorderColor(obj)"
+            (focus)="store.beginEdit()"
+            (input)="setObjectBorderColor(obj.id, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <button
+            type="button"
+            class="transparent"
+            aria-label="Transparent border color (no border)"
+            [attr.aria-pressed]="borderOpacity(obj) === 0"
+            (click)="setBorderTransparent(obj.id)"
+          ></button>
+        </div>
+        <div class="opacity-row">
+          <label for="object-border-opacity">Border opacity</label>
+          <input
+            id="object-border-opacity"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            [value]="borderOpacity(obj)"
+            [attr.aria-valuetext]="borderOpacity(obj) + '%'"
+            (focus)="store.beginEdit()"
+            (input)="setBorderOpacity(obj, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <output for="object-border-opacity">{{ borderOpacity(obj) }}%</output>
+        </div>
         <button type="button" class="action" (click)="store.copySelection()">Copy object</button>
         <app-stack-order />
         <button class="danger" type="button" (click)="store.deleteSelection()">
           Delete object
+        </button>
+      } @else if (store.selectedWall(); as wall) {
+        <p class="metric">
+          Wall · {{ format(wallLength(wall)) }} long · {{ wall.points.length - 1 }} segments
+        </p>
+        <label
+          >Thickness ({{ store.lengthUnit() }})<input
+            type="number"
+            [min]="min()"
+            [step]="step()"
+            [value]="display(wall.thickness)"
+            (change)="setWallThickness(wall.id, $event)"
+        /></label>
+        <div class="color-row">
+          <label for="wall-color">Color</label>
+          <input
+            id="wall-color"
+            type="color"
+            [value]="wallColor(wall)"
+            (focus)="store.beginEdit()"
+            (input)="setWallColor(wall.id, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <button
+            type="button"
+            class="transparent"
+            aria-label="Transparent wall color"
+            [attr.aria-pressed]="wallOpacity(wall) === 0"
+            (click)="setWallTransparent(wall.id)"
+          ></button>
+          @if (wall.color) {
+            <button
+              type="button"
+              class="action"
+              (click)="store.updateWall(wall.id, { color: undefined })"
+            >
+              Reset color
+            </button>
+          }
+        </div>
+        <div class="opacity-row">
+          <label for="wall-opacity">Wall opacity</label>
+          <input
+            id="wall-opacity"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            [value]="wallOpacity(wall)"
+            [attr.aria-valuetext]="wallOpacity(wall) + '%'"
+            (focus)="store.beginEdit()"
+            (input)="setWallOpacity(wall, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <output for="wall-opacity">{{ wallOpacity(wall) }}%</output>
+        </div>
+        <p class="empty">
+          Drag the wall to move it. Thickness is in real-world units from the plan scale.
+        </p>
+        <button class="danger" type="button" (click)="store.deleteSelection()">Delete wall</button>
+      } @else if (store.selectedOpening(); as opening) {
+        <p class="metric">
+          {{ opening.kind === 'door' ? 'Door' : 'Window' }} ·
+          {{
+            opening.wallId
+              ? 'Snapped to a wall'
+              : opening.objectId
+                ? 'Snapped to an object'
+                : 'Free-standing'
+          }}
+        </p>
+        <label
+          >Width ({{ store.lengthUnit() }})<input
+            type="number"
+            [min]="min()"
+            [step]="step()"
+            [value]="display(opening.width)"
+            (change)="setOpeningWidth(opening.id, $event)"
+        /></label>
+        <label
+          >Rotation (°)<input
+            type="number"
+            step="1"
+            [value]="round(opening.rotation ?? 0)"
+            (change)="setOpeningRotation(opening.id, $event)"
+        /></label>
+        <div class="color-row">
+          <label for="opening-color">Color</label>
+          <input
+            id="opening-color"
+            type="color"
+            [value]="openingColor(opening)"
+            (focus)="store.beginEdit()"
+            (input)="setOpeningColor(opening.id, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <button
+            type="button"
+            class="transparent"
+            aria-label="Transparent opening color"
+            [attr.aria-pressed]="openingOpacity(opening) === 0"
+            (click)="setOpeningTransparent(opening.id)"
+          ></button>
+          @if (opening.color) {
+            <button
+              type="button"
+              class="action"
+              (click)="store.updateOpening(opening.id, { color: undefined })"
+            >
+              Reset color
+            </button>
+          }
+        </div>
+        <div class="opacity-row">
+          <label for="opening-opacity">Opening opacity</label>
+          <input
+            id="opening-opacity"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            [value]="openingOpacity(opening)"
+            [attr.aria-valuetext]="openingOpacity(opening) + '%'"
+            (focus)="store.beginEdit()"
+            (input)="setOpeningOpacity(opening, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <output for="opening-opacity">{{ openingOpacity(opening) }}%</output>
+        </div>
+        @if (opening.kind === 'door') {
+          <button
+            type="button"
+            class="action"
+            (click)="store.updateOpening(opening.id, { flipH: !opening.flipH })"
+          >
+            Flip door horizontally
+          </button>
+          <button
+            type="button"
+            class="action"
+            (click)="store.updateOpening(opening.id, { flipV: !opening.flipV })"
+          >
+            Flip door vertically
+          </button>
+        }
+        <button type="button" class="action" (click)="store.copySelection()">
+          Copy {{ opening.kind }}
+        </button>
+        <button class="danger" type="button" (click)="store.deleteSelection()">
+          Delete {{ opening.kind }}
         </button>
       } @else if (store.selectedMeasurement(); as measurement) {
         <p class="metric">Length: {{ format(dist(measurement.start, measurement.end)) }}</p>
@@ -243,7 +507,9 @@ import { StackOrder } from './stack-order/stack-order';
             id="measurement-color"
             type="color"
             [value]="measurementColor(measurement)"
-            (change)="setMeasurementColor(measurement.id, $event)"
+            (focus)="store.beginEdit()"
+            (input)="setMeasurementColor(measurement.id, $event)"
+            (change)="store.endEdit()"
           />
           @if (measurement.color) {
             <button
@@ -260,7 +526,8 @@ import { StackOrder } from './stack-order/stack-order';
         </button>
       } @else {
         <p class="empty">
-          Select an object or measurement. Enter sizes in {{ store.lengthUnit() }}.
+          Select an object, wall, door, window or measurement. Enter sizes in
+          {{ store.lengthUnit() }}.
         </p>
       }
     </div>
@@ -271,12 +538,110 @@ export class Inspector {
   protected readonly dist = dist;
   protected readonly abs = Math.abs;
   protected readonly objectColor = objectColor;
+  protected readonly objectBorderColor = objectBorderColor;
   protected readonly measurementColor = measurementColor;
+  protected readonly wallLength = wallLength;
 
+  protected fillOpacity(obj: { color?: string }): number {
+    return opacityPercent(obj.color, 100);
+  }
+  protected borderOpacity(obj: { borderColor?: string }): number {
+    return opacityPercent(obj.borderColor, 0);
+  }
+  protected setFillOpacity(
+    obj: { id: string; kind: 'rect' | 'circle' | 'ellipse'; color?: string },
+    event: Event,
+  ): void {
+    const pct = this.numberValue(event);
+    this.store.updateObject(obj.id, { color: colorWithOpacity(objectColor(obj), pct) });
+  }
+  protected setBorderOpacity(obj: { id: string; borderColor?: string }, event: Event): void {
+    const pct = this.numberValue(event);
+    if (pct <= 0) {
+      this.store.updateObject(obj.id, { borderColor: undefined });
+    } else {
+      this.store.updateObject(obj.id, {
+        borderColor: colorWithOpacity(objectBorderColor(obj), pct),
+      });
+    }
+  }
+  protected setFillTransparent(id: string): void {
+    this.store.updateObject(id, { color: 'transparent' });
+    this.store.endEdit();
+  }
+  protected setBorderTransparent(id: string): void {
+    this.store.updateObject(id, { borderColor: undefined });
+    this.store.endEdit();
+  }
+  protected setObjectBorderColor(id: string, event: Event): void {
+    const color = normalizeColor(this.inputValue(event));
+    const obj = this.store.selectedObject();
+    if (color && obj) {
+      const pct = this.borderOpacity(obj);
+      this.store.updateObject(id, { borderColor: colorWithOpacity(color, pct > 0 ? pct : 100) });
+    }
+  }
+  protected readonly openingColor = openingColor;
+  protected openingOpacity(opening: { color?: string }): number {
+    return opacityPercent(opening.color, 100);
+  }
+  protected setOpeningColor(id: string, event: Event): void {
+    const color = normalizeColor(this.inputValue(event));
+    const opening = this.store.selectedOpening();
+    if (color && opening) {
+      const pct = this.openingOpacity(opening);
+      this.store.updateOpening(id, { color: colorWithOpacity(color, pct > 0 ? pct : 100) });
+    }
+  }
+  protected setOpeningOpacity(
+    opening: { id: string; kind: 'door' | 'window'; color?: string },
+    event: Event,
+  ): void {
+    const pct = this.numberValue(event);
+    this.store.updateOpening(opening.id, { color: colorWithOpacity(openingColor(opening), pct) });
+  }
+  protected setOpeningTransparent(id: string): void {
+    this.store.updateOpening(id, { color: 'transparent' });
+    this.store.endEdit();
+  }
+  protected setOpeningWidth(id: string, event: Event): void {
+    const v = this.lengthValue(event);
+    if (v > 0) this.store.updateOpening(id, { width: v });
+  }
+  protected setOpeningRotation(id: string, event: Event): void {
+    const v = this.numberValue(event);
+    if (Number.isFinite(v)) this.store.updateOpening(id, { rotation: v });
+  }
+  protected setWallThickness(id: string, event: Event): void {
+    const v = this.lengthValue(event);
+    if (v > 0) this.store.updateWall(id, { thickness: v });
+  }
+  protected readonly wallColor = wallColor;
+  protected wallOpacity(wall: { color?: string }): number {
+    return opacityPercent(wall.color, 100);
+  }
+  protected setWallColor(id: string, event: Event): void {
+    const color = normalizeColor(this.inputValue(event));
+    const wall = this.store.selectedWall();
+    if (color && wall) {
+      const pct = this.wallOpacity(wall);
+      this.store.updateWall(id, { color: colorWithOpacity(color, pct > 0 ? pct : 100) });
+    }
+  }
+  protected setWallOpacity(wall: { id: string; color?: string }, event: Event): void {
+    const pct = this.numberValue(event);
+    this.store.updateWall(wall.id, { color: colorWithOpacity(wallColor(wall), pct) });
+  }
+  protected setWallTransparent(id: string): void {
+    this.store.updateWall(id, { color: 'transparent' });
+    this.store.endEdit();
+  }
   protected setObjectColor(id: string, event: Event): void {
     const color = normalizeColor(this.inputValue(event));
-    if (color) {
-      this.store.updateObject(id, { color });
+    const obj = this.store.selectedObject();
+    if (color && obj) {
+      const pct = this.fillOpacity(obj);
+      this.store.updateObject(id, { color: colorWithOpacity(color, pct > 0 ? pct : 100) });
     }
   }
 
@@ -304,7 +669,10 @@ export class Inspector {
   }
 
   protected lengthValue(event: Event): number {
-    return displayToMeters(this.numberValue(event), this.store.lengthUnit());
+    const unit = this.store.lengthUnit();
+    // Store exactly the precision the field displays (0.1 cm / 0.001 m), so stepped
+    // and typed values never accumulate binary-float tails like 22.100000000000001.
+    return roundMetersForDisplay(displayToMeters(this.numberValue(event), unit), unit);
   }
 
   protected renameGroup(id: string, event: Event): void {
