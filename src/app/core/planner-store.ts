@@ -15,7 +15,7 @@ import {
 import { type Hit } from './geometry';
 import {
   CUPBOARD_DOOR_ID,
-  cupboardDoorPlacement,
+  cupboardFrontPieces,
   furnitureById,
   furnitureObjectName,
   placementSpot,
@@ -333,16 +333,28 @@ export class PlannerStore {
     const centerY = panY + this.#viewSize.height / zoom / 2;
     const name = furnitureObjectName(item, this.#plan());
     const spot = placementSpot(item, { x: centerX, y: centerY }, this.#plan());
-    const result = this.#edit.addObject(item.kind, spot.x, spot.y, item.width, item.depth, name);
     if (item.id === CUPBOARD_DOOR_ID) {
-      const door = cupboardDoorPlacement(result.object);
-      this.#edit.addOpening('door', door.center, {
-        width: door.width,
-        rotation: door.rotation,
-        wallId: null,
-        flipV: true,
+      const pieces = cupboardFrontPieces({
+        x: spot.x,
+        y: spot.y,
+        width: item.width,
+        depth: item.depth,
       });
+      const made = this.#edit.addCupboardWithDoors(
+        item.width,
+        item.depth,
+        spot.x,
+        spot.y,
+        name,
+        pieces,
+      );
+      this.#sync();
+      this.#selection.set({ type: 'group', id: made.group.id });
+      this.setTool('select');
+      this.#status.set(`Added ${name}. Drag to move it as one piece.`);
+      return this.selectedObjects()[0] ?? null;
     }
+    const result = this.#edit.addObject(item.kind, spot.x, spot.y, item.width, item.depth, name);
     this.#sync();
     this.#selection.set({ type: 'object', id: result.object.id });
     this.setTool('select');

@@ -143,18 +143,37 @@ export const FURNITURE_CATEGORIES: readonly FurnitureCategory[] = [
 
 export const CUPBOARD_DOOR_ID = 'cupboard-door';
 
-/** Where the door goes for a cupboard-with-door: centred on the front (bottom) edge, swinging out. */
-export function cupboardDoorPlacement(obj: {
+export interface CupboardFront {
+  panels: { x: number; y: number; width: number; depth: number }[];
+  handles: { x: number; y: number; width: number; depth: number }[];
+}
+
+/** Two door fronts flush inside the front (bottom) edge, with a centre seam and a handle on each panel near the seam. */
+export function cupboardFrontPieces(obj: {
   x: number;
   y: number;
   width: number;
   depth: number;
-}): { center: { x: number; y: number }; width: number; rotation: number } {
-  return {
-    center: { x: obj.x + obj.width / 2, y: obj.y + obj.depth },
-    width: Math.min(0.8, obj.width * 0.8),
-    rotation: 0,
-  };
+}): CupboardFront {
+  const depth = 0.06;
+  const gap = 0.02;
+  const inset = 0.01;
+  const y = obj.y + obj.depth - depth - 0.005;
+  const panelWidth = (obj.width - inset * 2 - gap) / 2;
+  const panels = [0, 1].map((i) => ({
+    x: obj.x + inset + i * (panelWidth + gap),
+    y,
+    width: panelWidth,
+    depth,
+  }));
+  const handleSize = 0.05;
+  const handles = [-1, 1].map((side) => ({
+    x: obj.x + obj.width / 2 + side * 0.07 - handleSize / 2,
+    y: y + depth / 2 - handleSize / 2,
+    width: handleSize,
+    depth: handleSize,
+  }));
+  return { panels, handles };
 }
 
 export function filterFurniture(query: string): readonly FurnitureItem[] {

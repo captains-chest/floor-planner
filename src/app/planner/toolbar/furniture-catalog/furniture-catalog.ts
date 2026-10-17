@@ -210,14 +210,40 @@ import { PlannerStore } from '../../../core/planner-store';
                           />
                         }
                         @if (item.id === cupboardDoorId) {
-                          <path
-                            d="M 30 60 A 40 40 0 0 1 70 20"
-                            fill="none"
-                            stroke="#f5f7fa"
-                            stroke-width="2"
+                          <rect
+                            x="11"
+                            y="53"
+                            width="38"
+                            height="5"
+                            fill="#a8d4ff"
+                            stroke="#0d1117"
+                            stroke-width="0.7"
                           />
-                          <line x1="30" y1="60" x2="30" y2="20" stroke="#f5f7fa" stroke-width="2" />
-                          <line x1="30" y1="60" x2="70" y2="60" stroke="#f5f7fa" stroke-width="2" />
+                          <rect
+                            x="51"
+                            y="53"
+                            width="38"
+                            height="5"
+                            fill="#a8d4ff"
+                            stroke="#0d1117"
+                            stroke-width="0.7"
+                          />
+                          <circle
+                            cx="46"
+                            cy="55.5"
+                            r="1.6"
+                            fill="#f5f7fa"
+                            stroke="#0d1117"
+                            stroke-width="0.5"
+                          />
+                          <circle
+                            cx="54"
+                            cy="55.5"
+                            r="1.6"
+                            fill="#f5f7fa"
+                            stroke="#0d1117"
+                            stroke-width="0.5"
+                          />
                         }
                       </svg>
                       <span class="name">{{ item.name }}</span>

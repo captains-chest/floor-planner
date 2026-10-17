@@ -4,7 +4,7 @@ import {
   FURNITURE,
   FURNITURE_CATEGORIES,
   CUPBOARD_DOOR_ID,
-  cupboardDoorPlacement,
+  cupboardFrontPieces,
   filterFurniture,
   furnitureById,
   furnitureObjectName,
@@ -34,13 +34,31 @@ describe('furniture library', () => {
     expect(filterFurniture('  ')).toHaveLength(FURNITURE.length);
     expect(filterFurniture('zzz')).toEqual([]);
   });
-  it('places the cupboard door on the front edge of the cupboard', () => {
+  it('builds two cupboard fronts flush on the front edge, with handles by the seam', () => {
     const item = furnitureById(CUPBOARD_DOOR_ID)!;
-    expect(item.name).toBe('Cupboard with door');
-    const door = cupboardDoorPlacement({ x: 1, y: 2, width: item.width, depth: item.depth });
-    expect(door.center).toEqual({ x: 1.5, y: 2.6 });
-    expect(door.width).toBeCloseTo(0.8);
+    const pieces = cupboardFrontPieces({ x: 1, y: 2, width: item.width, depth: item.depth });
+    expect(pieces.panels).toHaveLength(2);
+    expect(pieces.handles).toHaveLength(2);
+    for (const panel of pieces.panels) {
+      expect(panel.y + panel.depth).toBeLessThanOrEqual(2.6 + 1e-9);
+      expect(panel.width).toBeLessThan(0.5);
+    }
+    expect(pieces.panels[1].x - (pieces.panels[0].x + pieces.panels[0].width)).toBeCloseTo(0.02);
   });
+
+  it('places a cupboard with doors as one deletable group in one undo step', () => {
+    const edit = new PlanEdit();
+    const item = furnitureById(CUPBOARD_DOOR_ID)!;
+    const pieces = cupboardFrontPieces({ x: 0, y: 0, width: item.width, depth: item.depth });
+    const made = edit.addCupboardWithDoors(item.width, item.depth, 0, 0, item.name, pieces);
+    expect(edit.plan.objects).toHaveLength(5);
+    expect(new Set(edit.plan.objects.map((o) => o.groupId))).toEqual(new Set([made.group.id]));
+    edit.deleteSelection({ type: 'group', id: made.group.id });
+    expect(edit.plan.objects).toHaveLength(0);
+    expect(edit.undo()).toBe(true);
+    expect(edit.plan.objects).toHaveLength(5);
+  });
+
   it('has unique ids, known categories and positive real-world sizes', () => {
     expect(new Set(FURNITURE.map((item) => item.id)).size).toBe(FURNITURE.length);
     for (const item of FURNITURE) {
