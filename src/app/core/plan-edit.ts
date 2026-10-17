@@ -257,8 +257,8 @@ export class PlanEdit {
       ...(color ? { color } : {}),
     });
     const body = mk('rect', { x, y, width, depth }, name);
-    const panels = pieces.panels.map((rect) => mk('rect', rect, 'Cupboard door', '#a8d4ff'));
-    const handles = pieces.handles.map((rect) => mk('circle', rect, 'Handle', '#f5f7fa'));
+    const panels = pieces.panels.map((rect) => mk('rect', rect, '', '#a8d4ff'));
+    const handles = pieces.handles.map((rect) => mk('circle', rect, '', '#f5f7fa'));
     this.#record();
     this.#plan = {
       ...this.#plan,

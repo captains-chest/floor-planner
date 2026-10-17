@@ -42,6 +42,7 @@ describe('furniture library', () => {
     for (const panel of pieces.panels) {
       expect(panel.y + panel.depth).toBeLessThanOrEqual(2.6 + 1e-9);
       expect(panel.width).toBeLessThan(0.5);
+      expect(panel.depth).toBeCloseTo(0.12);
     }
     expect(pieces.panels[1].x - (pieces.panels[0].x + pieces.panels[0].width)).toBeCloseTo(0.02);
   });

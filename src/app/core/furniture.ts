@@ -155,7 +155,7 @@ export function cupboardFrontPieces(obj: {
   width: number;
   depth: number;
 }): CupboardFront {
-  const depth = 0.06;
+  const depth = 0.12;
   const gap = 0.02;
   const inset = 0.01;
   const y = obj.y + obj.depth - depth - 0.005;

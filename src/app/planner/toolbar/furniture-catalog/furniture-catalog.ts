@@ -230,7 +230,7 @@ import { PlannerStore } from '../../../core/planner-store';
                           />
                           <circle
                             cx="46"
-                            cy="55.5"
+                            cy="54.5"
                             r="1.6"
                             fill="#f5f7fa"
                             stroke="#0d1117"
@@ -238,7 +238,7 @@ import { PlannerStore } from '../../../core/planner-store';
                           />
                           <circle
                             cx="54"
-                            cy="55.5"
+                            cy="54.5"
                             r="1.6"
                             fill="#f5f7fa"
                             stroke="#0d1117"
