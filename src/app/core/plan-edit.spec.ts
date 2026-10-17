@@ -143,7 +143,7 @@ describe('walls', () => {
     expect(edit.plan.walls[0].thickness).toBe(1);
     edit.applyScale({ x: 0, y: 0 }, { x: 1, y: 0 }, 2);
     expect(edit.plan.walls[0].points[1].x).toBeCloseTo(4);
-    expect(edit.plan.walls[0].thickness).toBeCloseTo(2 > 1 ? 1 * 2 : 1); // thickness scales (clamped only on update/load)
+    expect(edit.plan.walls[0].thickness).toBeCloseTo(2);
     edit.deleteSelection({ type: 'wall', id: added.wall.id });
     expect(edit.plan.walls).toHaveLength(0);
     expect(edit.undo()).toBe(true);
