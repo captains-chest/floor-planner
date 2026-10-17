@@ -226,7 +226,8 @@ describe('openings persistence and edit', () => {
     const svg = renderPlanSvg({ plan, imageDataUrl: null, lengthUnit: 'm' }).svg;
     expect(svg).toContain('A 0.9 0.9 0 0 1');
     expect(svg).toContain('scale(-1 -1)');
-    expect(svg).toContain('<rect x="-0.6" y="-0.075" width="1.2"');
+    expect(svg).toContain('<rect x="-0.6" y="-0.075" width="1.2" height="0.15" fill="none"');
+    expect(svg).not.toContain('height="0.15" fill="#fff"');
     expect(svg).not.toContain('<line x1="1.55" y1="0" x2="2.45" y2="0"');
   });
   it('exports openings in their chosen color, with opacity, black by default', () => {

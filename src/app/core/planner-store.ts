@@ -619,7 +619,7 @@ const toolHint = (tool: Tool): string => {
     case 'window':
       return 'Click to place a window · snaps to walls and object edges · Shift: no snap';
     case 'wall':
-      return 'Click to add wall points · double-click or Enter to finish · Alt: 90° · Shift: snap off';
+      return 'Click the start, then the end, of a straight wall · Alt: 90° · Shift: snap off';
     default: {
       const _never: never = tool;
       return _never;

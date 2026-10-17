@@ -140,6 +140,30 @@ describe('PlanEdit', () => {
 });
 
 describe('walls', () => {
+  it('places one straight wall per placement; the next placement is a separate wall', () => {
+    const edit = new PlanEdit();
+    edit.addWall([
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    // Even starting exactly where the previous wall ended, this is its own wall,
+    // not a continuation of a chain.
+    edit.addWall([
+      { x: 2, y: 0 },
+      { x: 2, y: 2 },
+    ]);
+    expect(edit.plan.walls).toHaveLength(2);
+    expect(edit.plan.walls[0].points).toEqual([
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    expect(edit.plan.walls[1].points).toEqual([
+      { x: 2, y: 0 },
+      { x: 2, y: 2 },
+    ]);
+    expect(edit.plan.walls[0].id).not.toBe(edit.plan.walls[1].id);
+  });
+
   it('adds, updates, scales, deletes and undoes walls', () => {
     const edit = new PlanEdit();
     const added = edit.addWall(

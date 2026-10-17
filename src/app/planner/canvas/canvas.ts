@@ -359,7 +359,7 @@ type DragState =
                 y="-0.075"
                 [attr.width]="item.o.width"
                 height="0.15"
-                fill="var(--bg-panel)"
+                fill="none"
                 [attr.stroke]="item.stroke"
                 [attr.stroke-opacity]="item.opacity"
                 stroke-width="2"
@@ -1255,8 +1255,8 @@ export class Canvas {
   }
 
   finishWallDraft(): void {
-    const pts = this.wallDraft();
-    if (pts.length >= 2) this.store.addWall(pts);
+    // Walls are placed on the second click, so there is no chain to finish;
+    // this only drops a pending start point and leaves the wall tool.
     this.wallDraft.set([]);
     if (this.store.tool() === 'wall') this.store.setTool('select');
   }
@@ -1393,17 +1393,21 @@ export class Canvas {
       return;
     }
     if (tool === 'wall') {
-      const last = this.wallDraft()[this.wallDraft().length - 1];
+      // One placement = one straight wall: first click sets the start, second click
+      // places the wall and clears the draft, ready for a separate next wall.
+      const start = this.wallDraft()[0];
       const target = this.wallSnapPoint(snapped.point, event.shiftKey || this.shiftHeld());
-      const pt = last
-        ? this.constrainOrthoPoint(last, target, event.altKey || this.altHeld())
-        : { ...target };
-      if (!last || dist(last, pt) > 0.01) this.wallDraft.update((pts) => [...pts, pt]);
-      this.store.setStatus(
-        this.wallDraft().length < 2
-          ? 'Click the next wall point'
-          : 'Click to add a segment · double-click or Enter to finish',
-      );
+      if (!start) {
+        this.wallDraft.set([{ ...target }]);
+        this.store.setStatus('Click the other end of the wall');
+        return;
+      }
+      const end = this.constrainOrthoPoint(start, target, event.altKey || this.altHeld());
+      this.wallDraft.set([]);
+      if (dist(start, end) > 0.01) {
+        this.store.addWall([start, end]);
+        this.store.setStatus('Wall placed · click the start of the next wall');
+      }
       return;
     }
     if (tool === 'rect' || tool === 'circle' || tool === 'ellipse') {
@@ -1544,7 +1548,7 @@ export class Canvas {
   protected onDoubleClick(event: MouseEvent): void {
     if (this.store.tool() === 'wall') {
       event.preventDefault();
-      this.finishWallDraft();
+      this.wallDraft.set([]);
     }
   }
   protected onPointerMove(event: PointerEvent): void {

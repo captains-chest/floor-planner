@@ -179,7 +179,7 @@ function openingSvg(o: Opening, hairline: number): string {
   const inner =
     o.kind === 'door'
       ? `<line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" ${stroke} stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(-h)}" y2="${n(-w)}" ${stroke} stroke-width="${sw}"/><path d="M ${n(-h)} ${n(-w)} A ${n(w)} ${n(w)} 0 0 1 ${n(h)} 0" fill="none" ${stroke} stroke-width="${sw}"/>`
-      : `<rect x="${n(-h)}" y="-0.075" width="${n(w)}" height="0.15" fill="#fff" ${stroke} stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" ${stroke} stroke-width="${sw}"/>`;
+      : `<rect x="${n(-h)}" y="-0.075" width="${n(w)}" height="0.15" fill="none" ${stroke} stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" ${stroke} stroke-width="${sw}"/>`;
   return `<g transform="translate(${n(o.center.x)} ${n(o.center.y)}) rotate(${n(o.rotation ?? 0)}) scale(${sx} ${sy})">${inner}</g>`;
 }
 function objectSvg(obj: PlacedObject, hairline: number, label: number): string {

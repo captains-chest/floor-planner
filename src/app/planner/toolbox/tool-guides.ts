@@ -50,11 +50,11 @@ export const TOOL_GUIDES = {
   wall: guide('wall', {
     label: 'Wall',
     shortcut: 'W',
-    summary: 'Click points for a wall path. Snaps to other walls. Double-click to finish.',
+    summary: 'Click the start, then the end, for one straight wall. Snaps to other walls.',
     tips: [
       { keys: ['Alt', '⌥'], text: 'locks to 90°' },
       { keys: ['Shift'], text: 'turns snap off' },
-      { keys: ['Enter'], text: 'finishes the wall' },
+      { keys: ['Enter'], text: 'stops placing walls' },
     ],
   }),
   door: guide('door', {
