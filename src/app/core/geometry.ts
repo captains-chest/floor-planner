@@ -287,6 +287,19 @@ export function snapWallTranslation(
   return found ? { dx: bestDx, dy: bestDy, snapped: true } : none;
 }
 
+/** A wall polyline with only its start or end point moved — the rest is untouched. */
+export function moveWallEndpoint(
+  points: readonly Point[],
+  end: 'start' | 'end',
+  target: Point,
+): Point[] {
+  return points.map((pt, i) =>
+    (end === 'start' && i === 0) || (end === 'end' && i === points.length - 1)
+      ? { ...target }
+      : { ...pt },
+  );
+}
+
 export function pointInRect(p: Point, x: number, y: number, width: number, depth: number): boolean {
   return p.x >= x && p.x <= x + width && p.y >= y && p.y <= y + depth;
 }
@@ -313,6 +326,7 @@ export type Hit =
   | { type: 'measurement'; id: string }
   | { type: 'measurement-end'; id: string; end: 'start' | 'end' }
   | { type: 'wall'; id: string }
+  | { type: 'wall-end'; id: string; end: 'start' | 'end' }
   | { type: 'opening'; id: string }
   | { type: 'rotate-object'; id: string }
   | { type: 'rotate-objects'; ids: string[] };
@@ -444,6 +458,7 @@ export function hitTest(
   handles: {
     objects: readonly PlacedObject[];
     measurementId: string | null;
+    wallId?: string | null;
   },
 ): Hit | null {
   const handleR = 10 / zoom;
@@ -463,6 +478,19 @@ export function hitTest(
     for (const item of rotationHandles(selectedObjects[0], zoom)) {
       if (dist(p, item.handle) <= handleR) {
         return { type: 'rotate-object', id: selectedObjects[0].id };
+      }
+    }
+  }
+
+  if (handles.wallId) {
+    const wall = (plan.walls ?? []).find((item) => item.id === handles.wallId);
+    if (wall && wall.points.length > 0) {
+      if (dist(p, wall.points[0]) <= handleR) {
+        return { type: 'wall-end', id: wall.id, end: 'start' };
+      }
+      const lastPoint = wall.points[wall.points.length - 1];
+      if (dist(p, lastPoint) <= handleR) {
+        return { type: 'wall-end', id: wall.id, end: 'end' };
       }
     }
   }

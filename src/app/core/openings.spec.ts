@@ -10,6 +10,7 @@ import {
 import { parseProjectDocument, PROJECT_KIND } from './persistence';
 import { PlanEdit } from './plan-edit';
 import { renderPlanSvg } from './plan-export';
+import { moveWallEndpoint } from './geometry';
 import { snapOpening, wallRenderSegments } from './openings';
 
 const wall: Wall = {
@@ -330,6 +331,25 @@ describe('attached openings follow their host', () => {
     expect(edit.plan.walls[0].points[0]).toEqual({ x: 0, y: 0 });
     expect(edit.plan.openings[0].center).toEqual({ x: 2, y: 0 });
     expect(edit.canUndo).toBe(false);
+  });
+  it('follows an endpoint drag and translates in parallel without rotating', () => {
+    const edit = new PlanEdit(planWithDoorOnWall(), null);
+    // Endpoint drag: extend/tilt the only segment; the door keeps its place along it.
+    edit.beginEdit();
+    edit.updateWall('w1', { points: moveWallEndpoint(wall.points, 'end', { x: 5, y: 1 }) });
+    edit.endEdit();
+    expect(edit.plan.openings[0].center.x).toBeCloseTo(2.5);
+    expect(edit.plan.openings[0].center.y).toBeCloseTo(0.5);
+    expect(edit.plan.openings[0].rotation).toBeCloseTo((Math.atan2(1, 5) * 180) / Math.PI);
+    expect(edit.undo()).toBe(true);
+    expect(edit.plan.openings[0].center).toEqual({ x: 2, y: 0 });
+    // Middle drag: whole-wall translation keeps direction (parallel, no rotation).
+    edit.updateWall('w1', {
+      points: wall.points.map((pt) => ({ x: pt.x + 1, y: pt.y + 2 })),
+    });
+    const [a, b] = edit.plan.walls[0].points;
+    expect({ x: b.x - a.x, y: b.y - a.y }).toEqual({ x: 4, y: 0 });
+    expect(edit.plan.openings[0].center).toEqual({ x: 3, y: 2 });
   });
   it('keeps an opening’s place along the wall when the wall rotates', () => {
     const edit = new PlanEdit(planWithDoorOnWall(), null);

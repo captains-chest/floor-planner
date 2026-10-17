@@ -6,6 +6,7 @@ import {
   measurementLine,
   offsetSegment,
   signedPerpendicularOffset,
+  moveWallEndpoint,
   snapWallPoint,
   snapWallTranslation,
   unitPerpendicular,
@@ -176,6 +177,48 @@ describe('wall snapping', () => {
     expect(moving[0].x + adjusted.dx).toBeCloseTo(4);
     expect(moving[0].y + adjusted.dy).toBeCloseTo(0.1);
     expect(snapWallTranslation(moving, walls, -1.95, 0, 0.2, false).snapped).toBe(false);
+  });
+});
+
+describe('wall endpoint editing', () => {
+  const points = [
+    { x: 0, y: 0 },
+    { x: 4, y: 0 },
+    { x: 4, y: 3 },
+  ];
+  it('moves only the start or end point of a polyline', () => {
+    expect(moveWallEndpoint(points, 'start', { x: -1, y: 1 })).toEqual([
+      { x: -1, y: 1 },
+      { x: 4, y: 0 },
+      { x: 4, y: 3 },
+    ]);
+    expect(moveWallEndpoint(points, 'end', { x: 5, y: 4 })).toEqual([
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+      { x: 5, y: 4 },
+    ]);
+    // Original is not mutated.
+    expect(points[0]).toEqual({ x: 0, y: 0 });
+  });
+  it('hit-tests the selected wall’s end handles ahead of the wall body', () => {
+    const plan = {
+      ...createDefaultPlan(),
+      walls: [{ id: 'w1', points, thickness: 0.15 }],
+    };
+    const withWall = { objects: [], measurementId: null, wallId: 'w1' };
+    expect(hitTest(plan, { x: 0.05, y: 0 }, 100, withWall)).toEqual({
+      type: 'wall-end',
+      id: 'w1',
+      end: 'start',
+    });
+    expect(hitTest(plan, { x: 4, y: 2.95 }, 100, withWall)).toEqual({
+      type: 'wall-end',
+      id: 'w1',
+      end: 'end',
+    });
+    // Without the wall selected, the same clicks hit the wall body as before.
+    const noWall = { objects: [], measurementId: null };
+    expect(hitTest(plan, { x: 0.05, y: 0 }, 100, noWall)).toEqual({ type: 'wall', id: 'w1' });
   });
 });
 

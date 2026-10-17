@@ -341,7 +341,7 @@ export const selectFromHit = (
   if (hit.type === 'object') {
     return selectObject(plan, current, hit.id, additive);
   }
-  if (hit.type === 'wall') return { type: 'wall', id: hit.id };
+  if (hit.type === 'wall' || hit.type === 'wall-end') return { type: 'wall', id: hit.id };
   if (hit.type === 'opening') return { type: 'opening', id: hit.id };
   return { type: 'measurement', id: hit.id };
 };
