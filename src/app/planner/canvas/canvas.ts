@@ -311,7 +311,7 @@ type DragState =
                 vector-effect="non-scaling-stroke"
               />
               <line
-                x1="-item.half"
+                [attr.x1]="-item.half"
                 y1="0"
                 [attr.x2]="-item.half"
                 [attr.y2]="-item.o.width"
