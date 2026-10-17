@@ -97,6 +97,20 @@ export interface Opening {
   wallId?: string | null;
   /** Object this opening is snapped to (e.g. a door on a cupboard edge), if any. */
   objectId?: string | null;
+  /** Custom opening color: #rrggbb, #rrggbbaa or 'transparent'. When missing, the opening is black. */
+  color?: string;
+}
+export const DEFAULT_OPENING_COLOR = '#000000';
+/** Solid hex for an opening's stored color (black when unset or invalid). */
+export function openingColor(opening: Pick<Opening, 'color'>): string {
+  return parseColor(opening.color, DEFAULT_OPENING_COLOR).hex;
+}
+/** Canvas/export paint for an opening: 'none' at 0% opacity, otherwise hex + opacity. */
+export function openingPaint(opening: Pick<Opening, 'color'>): { stroke: string; opacity: number } {
+  const parsed = parseColor(opening.color, DEFAULT_OPENING_COLOR);
+  return parsed.alpha <= 0
+    ? { stroke: 'none', opacity: 0 }
+    : { stroke: parsed.hex, opacity: parsed.alpha };
 }
 export const DEFAULT_DOOR_WIDTH = 0.9;
 export const DEFAULT_WINDOW_WIDTH = 1.2;

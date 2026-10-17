@@ -96,9 +96,24 @@ export function wallRenderSegments(wall: Wall, openings: readonly Opening[]): [P
     for (const [a, b] of segments) {
       const len = dist(a, b);
       if (len < 1e-9) continue;
-      const proj = closestPointOnSegment(opening.center, a, b);
-      const along = proj.t * len,
+      // Only the segment the opening actually lies on may be cut. Projecting with a
+      // clamped t (the old behaviour) also cut width-sized chunks out of every other
+      // segment of a multi-segment wall — on a closed loop an opening in the bottom
+      // wall ate pieces of the top and side walls too, detaching it visually.
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const rawT = ((opening.center.x - a.x) * dx + (opening.center.y - a.y) * dy) / (len * len);
+      const onLine = { x: a.x + rawT * dx, y: a.y + rawT * dy };
+      if (dist(opening.center, onLine) > wall.thickness / 2 + 1e-6) {
+        next.push([a, b]);
+        continue;
+      }
+      const along = rawT * len,
         half = opening.width / 2;
+      if (along + half <= 0 || along - half >= len) {
+        next.push([a, b]);
+        continue;
+      }
       const cuts: [number, number][] = [[Math.max(0, along - half), Math.min(len, along + half)]];
       let spans: [number, number][] = [[0, len]];
       for (const [c0, c1] of cuts) {
@@ -140,7 +155,16 @@ function anchorOn(opening: Opening, segments: readonly [Point, Point][]): Attach
   let best: (AttachmentAnchor & { distance: number }) | null = null;
   segments.forEach(([a, b], index) => {
     const hit = closestPointOnSegment(opening.center, a, b);
-    if (!best || hit.distance < best.distance) {
+    // At a joint two segments share an endpoint; a centre clamped onto a neighbouring
+    // segment must not win over the segment it truly lies on, or following a host
+    // change could flip the opening onto the wrong (perpendicular) segment.
+    const len2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+    const rawT =
+      len2 < 1e-12
+        ? 0
+        : ((opening.center.x - a.x) * (b.x - a.x) + (opening.center.y - a.y) * (b.y - a.y)) / len2;
+    const score = hit.distance + (rawT < -1e-9 || rawT > 1 + 1e-9 ? 1 : 0);
+    if (!best || score < best.distance) {
       const len = dist(a, b) || 1;
       const nx = -(b.y - a.y) / len;
       const ny = (b.x - a.x) / len;
@@ -151,7 +175,7 @@ function anchorOn(opening: Opening, segments: readonly [Point, Point][]): Attach
         t: hit.t,
         perpendicular,
         segmentAngle: angleDeg(a, b),
-        distance: hit.distance,
+        distance: score,
       };
     }
   });

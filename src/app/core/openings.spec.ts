@@ -65,6 +65,92 @@ describe('opening snapping', () => {
   });
 });
 
+describe('wall gap cutting on connected walls', () => {
+  const loopWall: Wall = {
+    id: 'loop',
+    points: [
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+      { x: 4, y: 3 },
+      { x: 0, y: 3 },
+      { x: 0, y: 0 },
+    ],
+    thickness: 0.15,
+  };
+  const onLoop = (patch: Partial<Opening>): Opening => ({
+    id: 'o1',
+    kind: 'window',
+    center: { x: 2, y: 3 },
+    width: 1.2,
+    rotation: 180,
+    wallId: 'loop',
+    ...patch,
+  });
+  const totalLength = (segs: [(typeof loopWall.points)[0], (typeof loopWall.points)[0]][]) =>
+    segs.reduce((sum, [a, b]) => sum + Math.hypot(b.x - a.x, b.y - a.y), 0);
+
+  it('cuts only the segment the opening lies on in a closed loop', () => {
+    const segs = wallRenderSegments(loopWall, [
+      onLoop({}),
+      onLoop({ id: 'o2', kind: 'door', center: { x: 4, y: 1.5 }, width: 0.9, rotation: 90 }),
+    ]);
+    // Top segment is untouched — the old code ate a chunk of it for each opening.
+    expect(segs).toContainEqual([
+      { x: 0, y: 0 },
+      { x: 4, y: 0 },
+    ]);
+    // Perimeter 14 minus window (1.2) and door (0.9) gaps, nothing else.
+    expect(totalLength(segs)).toBeCloseTo(14 - 1.2 - 0.9, 6);
+    // The window gap is exactly its span, centred on the bottom wall.
+    const bottomSegs = segs.filter(([a, b]) => a.y === 3 && b.y === 3);
+    const covered: [number, number][] = bottomSegs
+      .map(([a, b]): [number, number] => [Math.min(a.x, b.x), Math.max(a.x, b.x)])
+      .sort((p, q) => p[0] - q[0]);
+    expect(covered).toEqual([
+      [0, 1.4],
+      [2.6, 4],
+    ]);
+  });
+
+  it('does not cut the neighbouring segment for an opening next to a joint', () => {
+    const segs = wallRenderSegments(loopWall, [onLoop({ center: { x: 0.5, y: 3 } })]);
+    // Left (closing) segment stays whole; bottom is cut only up to the window span.
+    expect(segs).toContainEqual([
+      { x: 0, y: 3 },
+      { x: 0, y: 0 },
+    ]);
+    const bottomSegs = segs.filter(([a, b]) => a.y === 3 && b.y === 3);
+    expect(bottomSegs).toContainEqual([
+      { x: 4, y: 3 },
+      { x: 1.1, y: 3 },
+    ]);
+  });
+
+  it('keeps a near-joint opening on its own segment when the wall is edited', () => {
+    const edit = new PlanEdit(
+      {
+        ...createDefaultPlan(),
+        walls: [loopWall],
+        openings: [onLoop({ center: { x: 3.9, y: 3 } })],
+      },
+      null,
+    );
+    edit.updateWall('loop', {
+      points: [
+        { x: 0, y: 0 },
+        { x: 4, y: 0 },
+        { x: 5, y: 3 },
+        { x: 0, y: 3 },
+        { x: 0, y: 0 },
+      ],
+    });
+    // Still on the (now longer) bottom wall, proportionally near its right end — not
+    // flipped onto the diagonal side segment.
+    expect(edit.plan.openings[0].center.y).toBeCloseTo(3);
+    expect(edit.plan.openings[0].center.x).toBeCloseTo(4.875);
+  });
+});
+
 describe('openings persistence and edit', () => {
   it('loads openings back-compatibly and copies them free of the wall', () => {
     const old = parseProjectDocument({
@@ -134,6 +220,51 @@ describe('openings persistence and edit', () => {
     expect(svg).toContain('scale(-1 -1)');
     expect(svg).toContain('<rect x="-0.6" y="-0.075" width="1.2"');
     expect(svg).not.toContain('<line x1="1.55" y1="0" x2="2.45" y2="0"');
+  });
+  it('exports openings in their chosen color, with opacity, black by default', () => {
+    const plan = {
+      ...createDefaultPlan(),
+      walls: [wall],
+      openings: [
+        door({ color: '#ff00aa80' }),
+        {
+          id: 'win',
+          kind: 'window' as const,
+          center: { x: 3, y: 3 },
+          width: 1.2,
+          rotation: 0,
+          wallId: null,
+          color: '#00cc44',
+        },
+      ],
+    };
+    const svg = renderPlanSvg({ plan, imageDataUrl: null, lengthUnit: 'm' }).svg;
+    expect(svg).toContain('stroke="#ff00aa" stroke-opacity="0.502"');
+    expect(svg).toContain('stroke="#00cc44"');
+    const plain = renderPlanSvg({
+      plan: { ...plan, openings: [door()] },
+      imageDataUrl: null,
+      lengthUnit: 'm',
+    }).svg;
+    expect(plain).toContain('stroke="#000000" stroke-opacity="1"');
+  });
+  it('persists a valid opening color and drops an invalid one', () => {
+    const parsed = parseProjectDocument({
+      kind: PROJECT_KIND,
+      formatVersion: 1,
+      plan: {
+        version: 1,
+        name: 'P',
+        objects: [],
+        measurements: [],
+        walls: [wall],
+        openings: [door({ color: '#FF000080' }), door({ id: 'd2', color: 'nope' })],
+        groups: [],
+        viewport: { panX: 0, panY: 0, zoom: 40 },
+      },
+    });
+    expect(parsed!.plan.openings[0].color).toBe('#ff000080');
+    expect(parsed!.plan.openings[1].color).toBeUndefined();
   });
 });
 

@@ -205,6 +205,7 @@ function normalizeOpening(raw: unknown): Opening | null {
     return null;
   const center = normalizePoint(value.center);
   if (!center) return null;
+  const color = value.color === 'transparent' ? 'transparent' : normalizeColor(value.color);
   return {
     id: value.id,
     kind: value.kind,
@@ -216,6 +217,7 @@ function normalizeOpening(raw: unknown): Opening | null {
     flipV: Boolean(value.flipV),
     wallId: typeof value.wallId === 'string' ? value.wallId : null,
     objectId: typeof value.objectId === 'string' ? value.objectId : null,
+    ...(color ? { color } : {}),
   };
 }
 function normalizeWall(raw: unknown): Wall | null {

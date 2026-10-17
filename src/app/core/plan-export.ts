@@ -5,6 +5,7 @@ import {
   Opening,
   PlacedObject,
   Wall,
+  openingPaint,
   wallPaint,
 } from '../models/floor-plan';
 import { wallRenderSegments } from './openings';
@@ -167,15 +168,18 @@ function wallSvg(wall: Wall, openings: Opening[]): string {
     .join('');
 }
 function openingSvg(o: Opening, hairline: number): string {
+  const paint = openingPaint(o);
+  if (paint.stroke === 'none') return '';
   const w = o.width,
     h = w / 2,
     sw = n(hairline * 1.5),
     sx = o.flipH ? -1 : 1,
     sy = o.flipV ? -1 : 1;
+  const stroke = `stroke="${paint.stroke}" stroke-opacity="${n(paint.opacity)}"`;
   const inner =
     o.kind === 'door'
-      ? `<line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" stroke="${INK}" stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(-h)}" y2="${n(-w)}" stroke="${INK}" stroke-width="${sw}"/><path d="M ${n(-h)} ${n(-w)} A ${n(w)} ${n(w)} 0 0 1 ${n(h)} 0" fill="none" stroke="${INK}" stroke-width="${sw}"/>`
-      : `<rect x="${n(-h)}" y="-0.075" width="${n(w)}" height="0.15" fill="#fff" stroke="${INK}" stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" stroke="${INK}" stroke-width="${sw}"/>`;
+      ? `<line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" ${stroke} stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(-h)}" y2="${n(-w)}" ${stroke} stroke-width="${sw}"/><path d="M ${n(-h)} ${n(-w)} A ${n(w)} ${n(w)} 0 0 1 ${n(h)} 0" fill="none" ${stroke} stroke-width="${sw}"/>`
+      : `<rect x="${n(-h)}" y="-0.075" width="${n(w)}" height="0.15" fill="#fff" ${stroke} stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" ${stroke} stroke-width="${sw}"/>`;
   return `<g transform="translate(${n(o.center.x)} ${n(o.center.y)}) rotate(${n(o.rotation ?? 0)}) scale(${sx} ${sy})">${inner}</g>`;
 }
 function objectSvg(obj: PlacedObject, hairline: number, label: number): string {

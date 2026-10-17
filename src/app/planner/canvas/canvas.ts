@@ -15,6 +15,7 @@ import {
   fillPaint,
   measurementColor,
   PlacedObject,
+  openingPaint,
   wallPaint,
   Point,
   SNAP_PIXELS,
@@ -309,7 +310,8 @@ type DragState =
                 y1="0"
                 [attr.x2]="item.half"
                 y2="0"
-                stroke="#f5f7fa"
+                [attr.stroke]="item.stroke"
+                [attr.stroke-opacity]="item.opacity"
                 stroke-width="2.5"
                 vector-effect="non-scaling-stroke"
               />
@@ -318,14 +320,16 @@ type DragState =
                 y1="0"
                 [attr.x2]="-item.half"
                 [attr.y2]="-item.o.width"
-                stroke="#f5f7fa"
+                [attr.stroke]="item.stroke"
+                [attr.stroke-opacity]="item.opacity"
                 stroke-width="2.5"
                 vector-effect="non-scaling-stroke"
               />
               <path
                 [attr.d]="doorArc(item.o)"
                 fill="none"
-                stroke="#f5f7fa"
+                [attr.stroke]="item.stroke"
+                [attr.stroke-opacity]="item.opacity"
                 stroke-width="2"
                 vector-effect="non-scaling-stroke"
               />
@@ -336,7 +340,8 @@ type DragState =
                 [attr.width]="item.o.width"
                 height="0.15"
                 fill="var(--bg-panel)"
-                stroke="#f5f7fa"
+                [attr.stroke]="item.stroke"
+                [attr.stroke-opacity]="item.opacity"
                 stroke-width="2"
                 vector-effect="non-scaling-stroke"
               />
@@ -345,7 +350,8 @@ type DragState =
                 y1="0"
                 [attr.x2]="item.half"
                 y2="0"
-                stroke="#f5f7fa"
+                [attr.stroke]="item.stroke"
+                [attr.stroke-opacity]="item.opacity"
                 stroke-width="1.5"
                 vector-effect="non-scaling-stroke"
               />
@@ -912,11 +918,14 @@ export class Canvas {
     return (this.store.plan().openings ?? []).map((o) => {
       const [a, b] = openingEndpoints(o);
       const half = o.width / 2;
+      const paint = openingPaint(o);
       return {
         o,
         a,
         b,
         half,
+        stroke: paint.stroke,
+        opacity: paint.opacity,
         transform: `rotate(${o.rotation ?? 0} ${o.center.x} ${o.center.y})`,
         doorLeafEnd: { x: o.center.x - half, y: o.center.y - o.width },
         selected: selectedIds.has(o.id),

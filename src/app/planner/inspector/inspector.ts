@@ -7,6 +7,7 @@ import {
   colorWithOpacity,
   objectColor,
   opacityPercent,
+  openingColor,
   wallColor,
 } from '../../models/floor-plan';
 import { PlannerStore } from '../../core/planner-store';
@@ -426,6 +427,51 @@ import { StackOrder } from './stack-order/stack-order';
             [value]="round(opening.rotation ?? 0)"
             (change)="setOpeningRotation(opening.id, $event)"
         /></label>
+        <div class="color-row">
+          <label for="opening-color">Color</label>
+          <input
+            id="opening-color"
+            type="color"
+            [value]="openingColor(opening)"
+            (focus)="store.beginEdit()"
+            (input)="setOpeningColor(opening.id, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <button
+            type="button"
+            class="transparent"
+            aria-label="Transparent opening color"
+            [attr.aria-pressed]="openingOpacity(opening) === 0"
+            (click)="setOpeningTransparent(opening.id)"
+          ></button>
+          @if (opening.color) {
+            <button
+              type="button"
+              class="action"
+              (click)="store.updateOpening(opening.id, { color: undefined })"
+            >
+              Reset color
+            </button>
+          }
+        </div>
+        <div class="opacity-row">
+          <label for="opening-opacity">Opening opacity</label>
+          <input
+            id="opening-opacity"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            [value]="openingOpacity(opening)"
+            [attr.aria-valuetext]="openingOpacity(opening) + '%'"
+            (focus)="store.beginEdit()"
+            (input)="setOpeningOpacity(opening, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <output for="opening-opacity">{{ openingOpacity(opening) }}%</output>
+        </div>
         @if (opening.kind === 'door') {
           <button
             type="button"
@@ -533,6 +579,26 @@ export class Inspector {
       const pct = this.borderOpacity(obj);
       this.store.updateObject(id, { borderColor: colorWithOpacity(color, pct > 0 ? pct : 100) });
     }
+  }
+  protected readonly openingColor = openingColor;
+  protected openingOpacity(opening: { color?: string }): number {
+    return opacityPercent(opening.color, 100);
+  }
+  protected setOpeningColor(id: string, event: Event): void {
+    const color = normalizeColor(this.inputValue(event));
+    const opening = this.store.selectedOpening();
+    if (color && opening) {
+      const pct = this.openingOpacity(opening);
+      this.store.updateOpening(id, { color: colorWithOpacity(color, pct > 0 ? pct : 100) });
+    }
+  }
+  protected setOpeningOpacity(opening: { id: string; color?: string }, event: Event): void {
+    const pct = this.numberValue(event);
+    this.store.updateOpening(opening.id, { color: colorWithOpacity(openingColor(opening), pct) });
+  }
+  protected setOpeningTransparent(id: string): void {
+    this.store.updateOpening(id, { color: 'transparent' });
+    this.store.endEdit();
   }
   protected setOpeningWidth(id: string, event: Event): void {
     const v = this.lengthValue(event);
