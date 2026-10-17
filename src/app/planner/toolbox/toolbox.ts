@@ -17,6 +17,8 @@ import { MsrRectangleIconComponent } from '@captains-chest/material-symbols-roun
 import { MsrStadiumIconComponent } from '@captains-chest/material-symbols-rounded-icons/stadium';
 import { MsrStraightenIconComponent } from '@captains-chest/material-symbols-rounded-icons/straighten';
 import { MsrBrickIconComponent } from '@captains-chest/material-symbols-rounded-icons/brick';
+import { MsrDoorOpenIconComponent } from '@captains-chest/material-symbols-rounded-icons/door-open';
+import { MsrWindowIconComponent } from '@captains-chest/material-symbols-rounded-icons/window';
 import { MsrfArrowSelectorToolIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/arrow-selector-tool';
 import { MsrfCircleIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/circle';
 import { MsrfPanToolAltIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/pan-tool-alt';
@@ -24,6 +26,8 @@ import { MsrfRectangleIconComponent } from '@captains-chest/material-symbols-rou
 import { MsrfStadiumIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/stadium';
 import { MsrfStraightenIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/straighten';
 import { MsrfBrickIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/brick';
+import { MsrfDoorOpenIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/door-open';
+import { MsrfWindowIconComponent } from '@captains-chest/material-symbols-rounded-icons-filled/window';
 import { PlannerStore } from '../../core/planner-store';
 import {
   TOOL_PREVIEW_CLOSE_DELAY_MS,
@@ -65,6 +69,8 @@ const TOOL_ICONS = {
     activeIcon: MsrfStadiumIconComponent,
   },
   wall: { icon: MsrBrickIconComponent, activeIcon: MsrfBrickIconComponent },
+  door: { icon: MsrDoorOpenIconComponent, activeIcon: MsrfDoorOpenIconComponent },
+  window: { icon: MsrWindowIconComponent, activeIcon: MsrfWindowIconComponent },
 } as const satisfies Record<ToolbarTool, { icon: Type<unknown>; activeIcon: Type<unknown> }>;
 
 @Component({

@@ -12,7 +12,10 @@ import {
   Selection,
   ShapeKind,
   Viewport,
+  Opening,
+  OpeningKind,
   Wall,
+  clampOpeningWidth,
   clampWallThickness,
   DEFAULT_WALL_THICKNESS,
 } from '../models/floor-plan';
@@ -58,6 +61,7 @@ interface HistorySnapshot {
 interface ObjectClipboard {
   objects: PlacedObject[];
   groups: ObjectGroup[];
+  openings: Opening[];
 }
 
 const HISTORY_LIMIT = 50;
@@ -94,7 +98,7 @@ export class PlanEdit {
   }
 
   get canPaste(): boolean {
-    return (this.#clipboard?.objects.length ?? 0) > 0;
+    return (this.#clipboard?.objects.length ?? 0) + (this.#clipboard?.openings.length ?? 0) > 0;
   }
 
   get imageSizeMeters(): { width: number; height: number } | null {
@@ -298,11 +302,49 @@ export class PlanEdit {
     };
   }
 
+  addOpening(
+    kind: OpeningKind,
+    center: Point,
+    opts: { width?: number; rotation?: number; wallId?: string | null } = {},
+  ): { opening: Opening } {
+    const opening: Opening = {
+      id: createId(kind),
+      kind,
+      center: { ...center },
+      width: clampOpeningWidth(kind, opts.width),
+      rotation: opts.rotation ?? 0,
+      flipH: false,
+      flipV: false,
+      wallId: opts.wallId ?? null,
+    };
+    this.#record();
+    this.#plan = { ...this.#plan, openings: [...(this.#plan.openings ?? []), opening] };
+    return { opening };
+  }
+  updateOpening(id: string, patch: Partial<Opening>): void {
+    this.#record();
+    this.#plan = {
+      ...this.#plan,
+      openings: (this.#plan.openings ?? []).map((o) =>
+        o.id === id
+          ? {
+              ...o,
+              ...patch,
+              width: clampOpeningWidth(o.kind, patch.width ?? o.width),
+              center: patch.center ? { ...patch.center } : o.center,
+            }
+          : o,
+      ),
+    };
+  }
   copySelection(selection: Selection): PlanEditResult {
     const objects = selectedPlacedObjects(this.#plan, selection);
-    if (objects.length === 0) {
+    const openings =
+      selection?.type === 'opening'
+        ? (this.#plan.openings ?? []).filter((o) => o.id === selection.id)
+        : [];
+    if (objects.length === 0 && openings.length === 0)
       return { notice: { kind: 'nothing-to-copy' } };
-    }
     const groupIds = new Set(
       objects.map((item) => item.groupId).filter((id): id is string => typeof id === 'string'),
     );
@@ -311,31 +353,43 @@ export class PlanEdit {
       groups: (this.#plan.groups ?? [])
         .filter((group) => groupIds.has(group.id))
         .map((group) => ({ ...group })),
+      openings: openings.map((o) => ({ ...o, center: { ...o.center } })),
     };
     this.#pasteGeneration = 0;
-    return { notice: { kind: 'copied', count: objects.length } };
+    return { notice: { kind: 'copied', count: objects.length + openings.length } };
   }
 
   pasteClipboard(): PlanEditResult {
     const clipboard = this.#clipboard;
-    if (!clipboard || clipboard.objects.length === 0) {
+    if (!clipboard || (clipboard.objects.length === 0 && (clipboard.openings ?? []).length === 0)) {
       return { notice: { kind: 'nothing-to-paste' } };
     }
     this.#pasteGeneration += 1;
     const offset = PASTE_OFFSET_METERS * this.#pasteGeneration;
     const duplicated = duplicateClipboard(clipboard, { x: offset, y: offset });
+    const dupOpenings = (clipboard.openings ?? []).map((o) => ({
+      ...o,
+      id: createId(o.kind),
+      center: { x: o.center.x + offset, y: o.center.y + offset },
+      wallId: null,
+    }));
     this.#record();
     this.#plan = {
       ...this.#plan,
       objects: [...this.#plan.objects, ...duplicated.objects],
       groups: [...(this.#plan.groups ?? []), ...duplicated.groups],
+      openings: [...(this.#plan.openings ?? []), ...dupOpenings],
     };
     return {
-      notice: { kind: 'pasted', count: duplicated.objects.length },
-      selection: selectionFromObjectIds(
-        this.#plan,
-        duplicated.objects.map((obj) => obj.id),
-      ),
+      notice: { kind: 'pasted', count: duplicated.objects.length + dupOpenings.length },
+      selection: duplicated.objects.length
+        ? selectionFromObjectIds(
+            this.#plan,
+            duplicated.objects.map((obj) => obj.id),
+          )
+        : dupOpenings[0]
+          ? { type: 'opening', id: dupOpenings[0].id }
+          : null,
     };
   }
 
@@ -506,6 +560,11 @@ export class PlanEdit {
         end: scalePoint(item.end, factor),
         offset: (item.offset ?? 0) * factor,
       })),
+      openings: (this.#plan.openings ?? []).map((o) => ({
+        ...o,
+        center: scalePoint(o.center, factor),
+        width: o.width * factor,
+      })),
       walls: (this.#plan.walls ?? []).map((w) => ({
         ...w,
         points: w.points.map((pt) => scalePoint(pt, factor)),
@@ -666,7 +725,16 @@ const removeSelection = (plan: FloorPlan, selection: Selection): FloorPlan => {
     return { ...plan, measurements: plan.measurements.filter((item) => item.id !== selection.id) };
   }
   if (selection.type === 'wall') {
-    return { ...plan, walls: (plan.walls ?? []).filter((item) => item.id !== selection.id) };
+    return {
+      ...plan,
+      walls: (plan.walls ?? []).filter((item) => item.id !== selection.id),
+      openings: (plan.openings ?? []).map((o) =>
+        o.wallId === selection.id ? { ...o, wallId: null } : o,
+      ),
+    };
+  }
+  if (selection.type === 'opening') {
+    return { ...plan, openings: (plan.openings ?? []).filter((o) => o.id !== selection.id) };
   }
   if (selection.type === 'multi') {
     let next = removeObjects(plan, new Set(selection.objectIds));

@@ -41,6 +41,7 @@ import {
   snapToRightAngle,
 } from '../../core/geometry';
 import { drawnHelperStep, MAJOR_HELPER_MULTIPLE } from '../../core/helper-grid';
+import { openingEndpoints, snapOpening, wallRenderSegments } from '../../core/openings';
 import { PlannerStore } from '../../core/planner-store';
 import { formatLength, metersToDisplay } from '../../core/units';
 
@@ -63,6 +64,14 @@ type DragState =
     }
   | { type: 'move-measurement-end'; id: string; end: 'start' | 'end'; recorded: boolean }
   | { type: 'move-wall'; id: string; origPoints: Point[]; start: Point; recorded: boolean }
+  | {
+      type: 'move-opening';
+      id: string;
+      origCenter: Point;
+      origRotation: number;
+      start: Point;
+      recorded: boolean;
+    }
   | {
       type: 'rotate-objects';
       orig: { id: string; x: number; y: number; width: number; depth: number; rotation: number }[];
@@ -266,27 +275,135 @@ type DragState =
           />
         }
 
-        @for (wall of wallsView(); track wall.id) {
-          <polyline
-            [attr.points]="wall.points"
-            fill="none"
+        @for (seg of wallsView(); track $index) {
+          <line
+            [attr.x1]="seg.a.x"
+            [attr.y1]="seg.a.y"
+            [attr.x2]="seg.b.x"
+            [attr.y2]="seg.b.y"
             stroke="#d7dde8"
-            [attr.stroke-width]="wall.thickness"
+            [attr.stroke-width]="seg.thickness"
             stroke-linecap="round"
-            stroke-linejoin="round"
           />
-          @if (wall.selected) {
-            <polyline
-              [attr.points]="wall.points"
-              fill="none"
+          @if (seg.selected) {
+            <line
+              [attr.x1]="seg.a.x"
+              [attr.y1]="seg.a.y"
+              [attr.x2]="seg.b.x"
+              [attr.y2]="seg.b.y"
               stroke="var(--accent)"
               stroke-width="2"
               stroke-dasharray="6 4"
               vector-effect="non-scaling-stroke"
               stroke-linecap="round"
-              stroke-linejoin="round"
             />
           }
+        }
+        @for (item of openingsView(); track item.o.id) {
+          <g [attr.transform]="openingTransform(item.o)" [attr.opacity]="item.selected ? 1 : 0.95">
+            @if (item.o.kind === 'door') {
+              <line
+                [attr.x1]="-item.half"
+                y1="0"
+                [attr.x2]="item.half"
+                y2="0"
+                stroke="#f5f7fa"
+                stroke-width="2.5"
+                vector-effect="non-scaling-stroke"
+              />
+              <line
+                [attr.x1]="-item.half"
+                y1="0"
+                [attr.x2]="-item.half"
+                [attr.y2]="-item.o.width"
+                stroke="#f5f7fa"
+                stroke-width="2.5"
+                vector-effect="non-scaling-stroke"
+              />
+              <path
+                [attr.d]="doorArc(item.o)"
+                fill="none"
+                stroke="#f5f7fa"
+                stroke-width="2"
+                vector-effect="non-scaling-stroke"
+              />
+            } @else {
+              <rect
+                [attr.x]="-item.half"
+                y="-0.075"
+                [attr.width]="item.o.width"
+                height="0.15"
+                fill="var(--bg-panel)"
+                stroke="#f5f7fa"
+                stroke-width="2"
+                vector-effect="non-scaling-stroke"
+              />
+              <line
+                [attr.x1]="-item.half"
+                y1="0"
+                [attr.x2]="item.half"
+                y2="0"
+                stroke="#f5f7fa"
+                stroke-width="1.5"
+                vector-effect="non-scaling-stroke"
+              />
+            }
+            @if (item.selected) {
+              <rect
+                [attr.x]="-item.half"
+                y="-0.18"
+                [attr.width]="item.o.width"
+                height="0.36"
+                fill="none"
+                stroke="var(--accent)"
+                stroke-width="2"
+                stroke-dasharray="5 3"
+                vector-effect="non-scaling-stroke"
+              />
+            }
+          </g>
+        }
+        @if (openingPreview(); as pv) {
+          <g [attr.transform]="previewTransform(pv)" opacity="0.8">
+            <line
+              [attr.x1]="-pv.half"
+              y1="0"
+              [attr.x2]="pv.half"
+              y2="0"
+              stroke="var(--accent)"
+              stroke-width="2.5"
+              vector-effect="non-scaling-stroke"
+            />
+            @if (pv.kind === 'door') {
+              <path
+                [attr.d]="doorArc(pv)"
+                fill="none"
+                stroke="var(--accent)"
+                stroke-width="2"
+                vector-effect="non-scaling-stroke"
+              />
+              <line
+                [attr.x1]="-pv.half"
+                y1="0"
+                [attr.x2]="-pv.half"
+                [attr.y2]="-pv.width"
+                stroke="var(--accent)"
+                stroke-width="2.5"
+                vector-effect="non-scaling-stroke"
+              />
+            } @else {
+              <rect
+                [attr.x]="-pv.half"
+                y="-0.075"
+                [attr.width]="pv.width"
+                height="0.15"
+                fill="none"
+                stroke="var(--accent)"
+                stroke-width="2"
+                vector-effect="non-scaling-stroke"
+              />
+            }
+          </g>
         }
         @if (wallPreview(); as preview) {
           <polyline
@@ -752,12 +869,56 @@ export class Canvas {
   });
 
   protected readonly wallsView = computed(() =>
-    (this.store.plan().walls ?? []).map((w) => ({
-      ...w,
-      points: w.points.map((pt) => `${pt.x},${pt.y}`).join(' '),
-      selected: this.store.selectedWall()?.id === w.id,
-    })),
+    (this.store.plan().walls ?? []).flatMap((w) =>
+      wallRenderSegments(w, this.store.plan().openings ?? []).map(([a, b]) => ({
+        id: w.id,
+        a,
+        b,
+        thickness: w.thickness,
+        selected: this.store.selectedWall()?.id === w.id,
+      })),
+    ),
   );
+  protected readonly openingsView = computed(() =>
+    (this.store.plan().openings ?? []).map((o) => {
+      const [a, b] = openingEndpoints(o);
+      const half = o.width / 2;
+      return {
+        o,
+        a,
+        b,
+        half,
+        transform: `rotate(${o.rotation ?? 0} ${o.center.x} ${o.center.y})`,
+        doorLeafEnd: { x: o.center.x - half, y: o.center.y - o.width },
+        selected: this.store.selectedOpening()?.id === o.id,
+      };
+    }),
+  );
+  protected readonly openingPreview = computed(() => {
+    const tool = this.store.tool();
+    if (tool !== 'door' && tool !== 'window') return null;
+    const cur = this.cursor();
+    if (!cur) return null;
+    const snap = this.placementSnap(cur, tool, this.shiftHeld());
+    const fake = {
+      id: 'preview',
+      kind: tool,
+      center: snap.center,
+      width: tool === 'door' ? 0.9 : 1.2,
+      rotation: snap.rotation,
+      wallId: snap.wallId,
+    } as const;
+    const [a, b] = openingEndpoints(fake);
+    return {
+      kind: tool,
+      center: snap.center,
+      a,
+      b,
+      rotation: snap.rotation,
+      half: fake.width / 2,
+      width: fake.width,
+    };
+  });
   protected readonly wallThickness = computed(() => this.store.selectedWall()?.thickness ?? 0.15);
   protected readonly wallPreview = computed(() => {
     if (this.store.tool() !== 'wall' || this.wallDraft().length === 0) return null;
@@ -1163,6 +1324,11 @@ export class Canvas {
       return;
     }
 
+    if (tool === 'door' || tool === 'window') {
+      const snap = this.placementSnap(world, tool, event.shiftKey || this.shiftHeld());
+      this.store.addOpening(tool, snap.center, { rotation: snap.rotation, wallId: snap.wallId });
+      return;
+    }
     if (tool === 'wall') {
       const last = this.wallDraft()[this.wallDraft().length - 1];
       const pt = last
@@ -1236,6 +1402,19 @@ export class Canvas {
           type: 'move-measurement-end',
           id: hit.id,
           end: hit.end,
+          recorded: false,
+        });
+        return;
+      }
+      if (hit.type === 'opening') {
+        const o = this.store.plan().openings.find((x) => x.id === hit.id);
+        if (!o) return;
+        this.drag.set({
+          type: 'move-opening',
+          id: o.id,
+          origCenter: { ...o.center },
+          origRotation: o.rotation ?? 0,
+          start: world,
           recorded: false,
         });
         return;
@@ -1377,6 +1556,36 @@ export class Canvas {
       return;
     }
 
+    if (drag.type === 'move-opening') {
+      if (!drag.recorded) {
+        this.store.beginEdit();
+        this.drag.set({ ...drag, recorded: true });
+      }
+      const raw = {
+        x: drag.origCenter.x + (world.x - drag.start.x),
+        y: drag.origCenter.y + (world.y - drag.start.y),
+      };
+      const snap = snapOpening(
+        raw,
+        this.store.plan().walls ?? [],
+        this.store.plan().objects,
+        SNAP_PIXELS / this.zoom(),
+        !(event.shiftKey || this.shiftHeld()),
+      );
+      if (snap.target)
+        this.store.updateOpening(drag.id, {
+          center: snap.center,
+          rotation: snap.rotation,
+          wallId: snap.wallId,
+        });
+      else
+        this.store.updateOpening(drag.id, {
+          center: raw,
+          rotation: drag.origRotation,
+          wallId: null,
+        });
+      return;
+    }
     if (drag.type === 'move-wall') {
       const rawDx = world.x - drag.start.x,
         rawDy = world.y - drag.start.y;
@@ -1452,6 +1661,38 @@ export class Canvas {
     this.drag.set({ type: 'none' });
   }
 
+  protected openingTransform(o: {
+    center: Point;
+    rotation: number;
+    flipH?: boolean;
+    flipV?: boolean;
+  }): string {
+    return `translate(${o.center.x} ${o.center.y}) rotate(${o.rotation ?? 0}) scale(${o.flipH ? -1 : 1} ${o.flipV ? -1 : 1})`;
+  }
+  protected previewTransform(pv: { center: Point; rotation: number }): string {
+    return `translate(${pv.center.x} ${pv.center.y}) rotate(${pv.rotation ?? 0})`;
+  }
+  protected doorArc(o: { width: number }): string {
+    const h = o.width / 2;
+    return `M ${-h} ${-o.width} A ${o.width} ${o.width} 0 0 1 ${h} 0`;
+  }
+  protected placementSnap(
+    point: Point,
+    kind: string,
+    shift: boolean,
+  ): { center: Point; rotation: number; wallId: string | null; target: string | null } {
+    const plan = this.store.plan();
+    const zoom = plan.viewport.zoom;
+    const snapped = snapOpening(point, plan.walls ?? [], plan.objects, SNAP_PIXELS / zoom, !shift);
+    return snapped.target
+      ? snapped
+      : {
+          center: point,
+          rotation: this.store.selectedOpening()?.rotation ?? 0,
+          wallId: null,
+          target: null,
+        };
+  }
   protected rotateTransform(obj: PlacedObject): string {
     const rotation = obj.rotation ?? 0;
     const cx = obj.x + obj.width / 2;

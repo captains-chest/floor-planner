@@ -1,4 +1,14 @@
-export type Tool = 'select' | 'pan' | 'scale' | 'measure' | 'rect' | 'circle' | 'ellipse' | 'wall';
+export type Tool =
+  | 'select'
+  | 'pan'
+  | 'scale'
+  | 'measure'
+  | 'rect'
+  | 'circle'
+  | 'ellipse'
+  | 'wall'
+  | 'door'
+  | 'window';
 
 export type ShapeKind = 'rect' | 'circle' | 'ellipse';
 
@@ -57,6 +67,29 @@ export function clampWallThickness(value: unknown): number {
     ? Math.min(MAX_WALL_THICKNESS, Math.max(MIN_WALL_THICKNESS, value))
     : DEFAULT_WALL_THICKNESS;
 }
+export type OpeningKind = 'door' | 'window';
+export interface Opening {
+  id: string;
+  kind: OpeningKind;
+  center: Point;
+  width: number;
+  /** Direction of the opening span, in degrees. */
+  rotation: number;
+  /** Door only: mirror the hinge side. */
+  flipH?: boolean;
+  /** Door only: mirror the swing side. */
+  flipV?: boolean;
+  /** Wall this opening is snapped into, if any. Rendering cuts that wall at the span. */
+  wallId?: string | null;
+}
+export const DEFAULT_DOOR_WIDTH = 0.9;
+export const DEFAULT_WINDOW_WIDTH = 1.2;
+export function clampOpeningWidth(kind: OpeningKind, value: unknown): number {
+  const fallback = kind === 'door' ? DEFAULT_DOOR_WIDTH : DEFAULT_WINDOW_WIDTH;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(4, Math.max(0.3, value))
+    : fallback;
+}
 export interface ObjectGroup {
   id: string;
   name: string;
@@ -79,6 +112,7 @@ export interface FloorPlan {
   objects: PlacedObject[];
   measurements: Measurement[];
   walls: Wall[];
+  openings: Opening[];
   groups: ObjectGroup[];
   viewport: Viewport;
 }
@@ -89,6 +123,7 @@ export type Selection =
   | { type: 'group'; id: string }
   | { type: 'measurement'; id: string }
   | { type: 'wall'; id: string }
+  | { type: 'opening'; id: string }
   | {
       type: 'multi';
       objectIds: string[];
@@ -226,6 +261,7 @@ export function createDefaultPlan(): FloorPlan {
     objects: [],
     measurements: [],
     walls: [],
+    openings: [],
     groups: [],
     viewport: { panX: -1, panY: -1, zoom: 40 },
   };
