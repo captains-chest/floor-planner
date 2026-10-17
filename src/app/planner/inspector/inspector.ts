@@ -1,6 +1,11 @@
 import { Component, inject } from '@angular/core';
 import { dist } from '../../core/geometry';
-import { measurementColor, normalizeColor, objectColor } from '../../models/floor-plan';
+import {
+  measurementColor,
+  normalizeColor,
+  objectBorderColor,
+  objectColor,
+} from '../../models/floor-plan';
 import { PlannerStore } from '../../core/planner-store';
 import {
   displayToMeters,
@@ -226,6 +231,23 @@ import { StackOrder } from './stack-order/stack-order';
             </button>
           }
         </div>
+        <div class="color-row">
+          <label for="object-border-toggle">Border</label>
+          <input
+            id="object-border-toggle"
+            type="checkbox"
+            [checked]="!!obj.borderColor"
+            (change)="setObjectBorder(obj, $event)"
+          />
+          <label for="object-border-color">Border color</label>
+          <input
+            id="object-border-color"
+            type="color"
+            [value]="objectBorderColor(obj)"
+            [disabled]="!obj.borderColor"
+            (change)="setObjectBorderColor(obj.id, $event)"
+          />
+        </div>
         <button type="button" class="action" (click)="store.copySelection()">Copy object</button>
         <app-stack-order />
         <button class="danger" type="button" (click)="store.deleteSelection()">
@@ -271,8 +293,17 @@ export class Inspector {
   protected readonly dist = dist;
   protected readonly abs = Math.abs;
   protected readonly objectColor = objectColor;
+  protected readonly objectBorderColor = objectBorderColor;
   protected readonly measurementColor = measurementColor;
 
+  protected setObjectBorder(obj: { id: string; borderColor?: string }, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.store.updateObject(obj.id, { borderColor: checked ? objectBorderColor(obj) : undefined });
+  }
+  protected setObjectBorderColor(id: string, event: Event): void {
+    const color = normalizeColor(this.inputValue(event));
+    if (color) this.store.updateObject(id, { borderColor: color });
+  }
   protected setObjectColor(id: string, event: Event): void {
     const color = normalizeColor(this.inputValue(event));
     if (color) {

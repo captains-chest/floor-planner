@@ -40,6 +40,8 @@ export interface PlacedObject {
   groupId: string | null;
   /** Custom fill as #rrggbb. When missing, the shape's default color is used. */
   color?: string;
+  /** Optional border color as #rrggbb. When missing, no custom border (canvas/export keep the subtle hairline). */
+  borderColor?: string;
 }
 
 export interface ObjectGroup {
@@ -106,6 +108,10 @@ export function normalizeColor(value: unknown): string | undefined {
   return `#${hex.length === 3 ? hex.replace(/./g, '$&$&') : hex}`;
 }
 
+export const OBJECT_BORDER_COLOR = '#1a1d23';
+export function objectBorderColor(obj: Pick<PlacedObject, 'borderColor'>): string {
+  return obj.borderColor ?? OBJECT_BORDER_COLOR;
+}
 export function objectColor(obj: Pick<PlacedObject, 'kind' | 'color'>): string {
   return obj.color ?? OBJECT_COLORS[obj.kind];
 }

@@ -239,6 +239,9 @@ function normalizeObject(raw: unknown): PlacedObject | null {
     rotation: num(value.rotation, 0),
     groupId: typeof value.groupId === 'string' ? value.groupId : null,
     ...(color ? { color } : {}),
+    ...(normalizeColor(value.borderColor)
+      ? { borderColor: normalizeColor(value.borderColor) }
+      : {}),
   };
 }
 

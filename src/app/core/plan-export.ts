@@ -1,4 +1,4 @@
-import { FloorPlan, PlacedObject, objectColor } from '../models/floor-plan';
+import { FloorPlan, PlacedObject, objectBorderColor, objectColor } from '../models/floor-plan';
 import { contentBBox, dimensionView, type BoundingBox } from './geometry';
 import { formatLength, type LengthUnit } from './units';
 
@@ -135,7 +135,10 @@ function objectSvg(obj: PlacedObject, hairline: number, label: number): string {
   const cx = obj.x + obj.width / 2;
   const cy = obj.y + obj.depth / 2;
   const fill = objectColor(obj);
-  const paint = `fill="${fill}" fill-opacity="0.82" stroke="${INK}" stroke-opacity="0.6" stroke-width="${n(hairline)}"`;
+  const border = obj.borderColor;
+  const paint = border
+    ? `fill="${fill}" fill-opacity="0.82" stroke="${objectBorderColor(obj)}" stroke-opacity="1" stroke-width="${n(hairline * 3)}"`
+    : `fill="${fill}" fill-opacity="0.82" stroke="${INK}" stroke-opacity="0.6" stroke-width="${n(hairline)}"`;
   const shape =
     obj.kind === 'rect'
       ? `<rect x="${n(obj.x)}" y="${n(obj.y)}" width="${n(obj.width)}" height="${n(obj.depth)}" ${paint}/>`

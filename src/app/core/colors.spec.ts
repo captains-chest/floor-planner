@@ -3,7 +3,9 @@ import {
   MEASUREMENT_COLOR,
   measurementColor,
   normalizeColor,
+  OBJECT_BORDER_COLOR,
   OBJECT_COLORS,
+  objectBorderColor,
   objectColor,
 } from '../models/floor-plan';
 import { parseProjectDocument, PROJECT_KIND } from './persistence';
@@ -22,6 +24,62 @@ describe('colors', () => {
     expect(objectColor({ kind: 'rect', color: '#123456' })).toBe('#123456');
     expect(measurementColor({})).toBe(MEASUREMENT_COLOR);
     expect(measurementColor({ color: '#654321' })).toBe('#654321');
+    expect(objectBorderColor({})).toBe(OBJECT_BORDER_COLOR);
+    expect(objectBorderColor({ borderColor: '#123123' })).toBe('#123123');
+  });
+
+  it('keeps a saved border color, drops invalid ones, and older saves have no border', () => {
+    const parsed = parseProjectDocument({
+      kind: PROJECT_KIND,
+      formatVersion: 1,
+      plan: {
+        version: 1,
+        name: 'B',
+        objects: [
+          {
+            id: 'a',
+            kind: 'rect',
+            name: 'A',
+            x: 0,
+            y: 0,
+            width: 1,
+            depth: 1,
+            rotation: 0,
+            groupId: null,
+            borderColor: '#00AAFF',
+          },
+          {
+            id: 'b',
+            kind: 'rect',
+            name: 'B',
+            x: 0,
+            y: 0,
+            width: 1,
+            depth: 1,
+            rotation: 0,
+            groupId: null,
+            borderColor: 'red',
+          },
+          {
+            id: 'c',
+            kind: 'rect',
+            name: 'C',
+            x: 0,
+            y: 0,
+            width: 1,
+            depth: 1,
+            rotation: 0,
+            groupId: null,
+          },
+        ],
+        measurements: [],
+        groups: [],
+        viewport: { panX: 0, panY: 0, zoom: 40 },
+      },
+    });
+    expect(parsed!.plan.objects[0].borderColor).toBe('#00aaff');
+    expect('borderColor' in parsed!.plan.objects[1]).toBe(false);
+    expect('borderColor' in parsed!.plan.objects[2]).toBe(false);
   });
 
   it('keeps saved colors, drops invalid ones, and loads older saves without colors', () => {

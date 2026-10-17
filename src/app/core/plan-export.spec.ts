@@ -59,6 +59,18 @@ describe('renderPlanSvg', () => {
     expect(plain).toContain('stroke="#0f7a68"');
   });
 
+  it('uses a custom object border in export, subtle hairline otherwise', () => {
+    const base = plan();
+    const bordered = plan({
+      objects: [{ ...base.objects[0], borderColor: '#ff00aa' }, base.objects[1]],
+    });
+    const svg = renderPlanSvg({ plan: bordered, imageDataUrl: null, lengthUnit: 'm' }).svg;
+    expect(svg).toContain('stroke="#ff00aa"');
+    const plain = renderPlanSvg({ plan: base, imageDataUrl: null, lengthUnit: 'm' }).svg;
+    expect(plain).not.toContain('stroke="#ff00aa"');
+    expect(plain).toContain('stroke-opacity="0.6"');
+  });
+
   it('escapes the plan name in the title and header', () => {
     const { svg } = renderPlanSvg({ plan: plan(), imageDataUrl: null, lengthUnit: 'm' });
     expect(svg).toContain('<title>Flat &lt;2nd&gt; &amp; &quot;loft&quot;</title>');

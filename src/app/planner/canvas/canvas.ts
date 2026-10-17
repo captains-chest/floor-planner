@@ -273,9 +273,9 @@ type DragState =
                 [attr.height]="item.obj.depth"
                 [attr.fill]="item.fill"
                 fill-opacity="0.82"
-                stroke="#0d1117"
-                stroke-opacity="0.35"
-                stroke-width="1"
+                [attr.stroke]="item.border ?? '#0d1117'"
+                [attr.stroke-opacity]="item.border ? 1 : 0.35"
+                [attr.stroke-width]="item.border ? 3 : 1"
                 vector-effect="non-scaling-stroke"
               />
             } @else {
@@ -286,9 +286,9 @@ type DragState =
                 [attr.ry]="item.obj.depth / 2"
                 [attr.fill]="item.fill"
                 fill-opacity="0.82"
-                stroke="#0d1117"
-                stroke-opacity="0.35"
-                stroke-width="1"
+                [attr.stroke]="item.border ?? '#0d1117'"
+                [attr.stroke-opacity]="item.border ? 1 : 0.35"
+                [attr.stroke-width]="item.border ? 3 : 1"
                 vector-effect="non-scaling-stroke"
               />
             }
@@ -717,6 +717,7 @@ export class Canvas {
     this.store.plan().objects.map((obj) => ({
       obj,
       fill: objectColor(obj),
+      border: obj.borderColor ?? null,
     })),
   );
 
