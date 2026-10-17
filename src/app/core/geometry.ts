@@ -1,4 +1,4 @@
-import { FloorPlan, Measurement, Point, type PlacedObject } from '../models/floor-plan';
+import { FloorPlan, Measurement, Point, Wall, type PlacedObject } from '../models/floor-plan';
 import { formatLength, type LengthUnit } from './units';
 
 export function dist(a: Point, b: Point): number {
@@ -214,6 +214,7 @@ export type Hit =
   | { type: 'object'; id: string }
   | { type: 'measurement'; id: string }
   | { type: 'measurement-end'; id: string; end: 'start' | 'end' }
+  | { type: 'wall'; id: string }
   | { type: 'rotate-object'; id: string }
   | { type: 'rotate-objects'; ids: string[] };
 
@@ -380,6 +381,16 @@ export function hitTest(
     }
   }
 
+  for (let k = (plan.walls ?? []).length - 1; k >= 0; k -= 1) {
+    const wall = plan.walls[k];
+    if (
+      wallSegments(wall).some(
+        ([a, b]) =>
+          closestPointOnSegment(p, a, b).distance <= Math.max(wall.thickness / 2, measureExtra),
+      )
+    )
+      return { type: 'wall', id: wall.id };
+  }
   const measurements = plan.measurements ?? [];
   for (let i = measurements.length - 1; i >= 0; i -= 1) {
     const measurement = measurements[i];
@@ -440,6 +451,10 @@ export function contentBBox(
       include(corner.x, corner.y);
     }
   }
+  for (const wall of plan.walls ?? []) {
+    for (const pt of wall.points)
+      include(pt.x - wall.thickness / 2, pt.y - wall.thickness / 2, wall.thickness, wall.thickness);
+  }
   for (const measurement of plan.measurements ?? []) {
     include(measurement.start.x, measurement.start.y);
     include(measurement.end.x, measurement.end.y);
@@ -486,4 +501,16 @@ export function dimensionView(
     tickDx: normal.x * tickLength,
     tickDy: normal.y * tickLength,
   };
+}
+
+export function wallSegments(wall: Pick<Wall, 'points'>): [Point, Point][] {
+  const out: [Point, Point][] = [];
+  for (let i = 1; i < wall.points.length; i++) out.push([wall.points[i - 1], wall.points[i]]);
+  return out;
+}
+export function wallLength(wall: Pick<Wall, 'points'>): number {
+  return wallSegments(wall).reduce((sum, [a, b]) => sum + dist(a, b), 0);
+}
+export function wallPointsAttr(wall: Pick<Wall, 'points'>): string {
+  return wall.points.map((pt) => `${pt.x},${pt.y}`).join(' ');
 }

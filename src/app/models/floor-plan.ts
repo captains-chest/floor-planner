@@ -1,4 +1,4 @@
-export type Tool = 'select' | 'pan' | 'scale' | 'measure' | 'rect' | 'circle' | 'ellipse';
+export type Tool = 'select' | 'pan' | 'scale' | 'measure' | 'rect' | 'circle' | 'ellipse' | 'wall';
 
 export type ShapeKind = 'rect' | 'circle' | 'ellipse';
 
@@ -44,6 +44,19 @@ export interface PlacedObject {
   borderColor?: string;
 }
 
+export interface Wall {
+  id: string;
+  points: Point[];
+  thickness: number;
+}
+export const DEFAULT_WALL_THICKNESS = 0.15;
+export const MIN_WALL_THICKNESS = 0.02;
+export const MAX_WALL_THICKNESS = 1;
+export function clampWallThickness(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(MAX_WALL_THICKNESS, Math.max(MIN_WALL_THICKNESS, value))
+    : DEFAULT_WALL_THICKNESS;
+}
 export interface ObjectGroup {
   id: string;
   name: string;
@@ -65,6 +78,7 @@ export interface FloorPlan {
   background: Background | null;
   objects: PlacedObject[];
   measurements: Measurement[];
+  walls: Wall[];
   groups: ObjectGroup[];
   viewport: Viewport;
 }
@@ -74,6 +88,7 @@ export type Selection =
   | { type: 'objects'; ids: string[] }
   | { type: 'group'; id: string }
   | { type: 'measurement'; id: string }
+  | { type: 'wall'; id: string }
   | {
       type: 'multi';
       objectIds: string[];
@@ -210,6 +225,7 @@ export function createDefaultPlan(): FloorPlan {
     background: null,
     objects: [],
     measurements: [],
+    walls: [],
     groups: [],
     viewport: { panX: -1, panY: -1, zoom: 40 },
   };

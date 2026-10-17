@@ -62,6 +62,7 @@ type DragState =
       recorded: boolean;
     }
   | { type: 'move-measurement-end'; id: string; end: 'start' | 'end'; recorded: boolean }
+  | { type: 'move-wall'; id: string; origPoints: Point[]; start: Point; recorded: boolean }
   | {
       type: 'rotate-objects';
       orig: { id: string; x: number; y: number; width: number; depth: number; rotation: number }[];
@@ -201,6 +202,7 @@ type DragState =
       (pointerup)="onPointerUp($event)"
       (pointercancel)="onPointerUp($event)"
       (contextmenu)="$event.preventDefault()"
+      (dblclick)="onDoubleClick($event)"
       (dragover)="onDragOver($event)"
       (drop)="onDrop($event)"
     >
@@ -261,6 +263,40 @@ type DragState =
             y="0"
             preserveAspectRatio="none"
             opacity="0.92"
+          />
+        }
+
+        @for (wall of wallsView(); track wall.id) {
+          <polyline
+            [attr.points]="wall.points"
+            fill="none"
+            stroke="#d7dde8"
+            [attr.stroke-width]="wall.thickness"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          @if (wall.selected) {
+            <polyline
+              [attr.points]="wall.points"
+              fill="none"
+              stroke="var(--accent)"
+              stroke-width="2"
+              stroke-dasharray="6 4"
+              vector-effect="non-scaling-stroke"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          }
+        }
+        @if (wallPreview(); as preview) {
+          <polyline
+            [attr.points]="preview"
+            fill="none"
+            stroke="var(--accent)"
+            [attr.stroke-width]="wallThickness()"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            opacity="0.75"
           />
         }
 
@@ -669,6 +705,7 @@ export class Canvas {
   private readonly drag = signal<DragState>({ type: 'none' });
   protected readonly scaleP1 = signal<Point | null>(null);
   protected readonly measureDraft = signal<{ start: Point; end?: Point } | null>(null);
+  protected readonly wallDraft = signal<Point[]>([]);
   protected readonly cursor = signal<Point | null>(null);
   protected readonly snap = signal<SnapResult>({
     point: { x: 0, y: 0 },
@@ -714,6 +751,21 @@ export class Canvas {
     };
   });
 
+  protected readonly wallsView = computed(() =>
+    (this.store.plan().walls ?? []).map((w) => ({
+      ...w,
+      points: w.points.map((pt) => `${pt.x},${pt.y}`).join(' '),
+      selected: this.store.selectedWall()?.id === w.id,
+    })),
+  );
+  protected readonly wallThickness = computed(() => this.store.selectedWall()?.thickness ?? 0.15);
+  protected readonly wallPreview = computed(() => {
+    if (this.store.tool() !== 'wall' || this.wallDraft().length === 0) return null;
+    const last = this.wallDraft()[this.wallDraft().length - 1];
+    const raw = this.snap().snapped ? this.snap().point : (this.cursor() ?? last);
+    const end = this.constrainOrthoPoint(last, raw, this.altHeld());
+    return [...this.wallDraft(), end].map((pt) => `${pt.x},${pt.y}`).join(' ');
+  });
   protected readonly drawList = computed(() =>
     this.store.plan().objects.map((obj) => {
       const fill = fillPaint(obj);
@@ -978,14 +1030,22 @@ export class Canvas {
       this.store.tool();
       this.scaleP1.set(null);
       this.measureDraft.set(null);
+      this.wallDraft.set([]);
     });
   }
 
+  finishWallDraft(): void {
+    const pts = this.wallDraft();
+    if (pts.length >= 2) this.store.addWall(pts);
+    this.wallDraft.set([]);
+    if (this.store.tool() === 'wall') this.store.setTool('select');
+  }
   cancelDraft(): void {
     this.store.endEdit();
     this.drag.set({ type: 'none' });
     this.scaleP1.set(null);
     this.measureDraft.set(null);
+    this.wallDraft.set([]);
   }
 
   protected onModifierDown(event: KeyboardEvent): void {
@@ -1103,6 +1163,19 @@ export class Canvas {
       return;
     }
 
+    if (tool === 'wall') {
+      const last = this.wallDraft()[this.wallDraft().length - 1];
+      const pt = last
+        ? this.constrainOrthoPoint(last, snapped.point, event.altKey || this.altHeld())
+        : { ...snapped.point };
+      if (!last || dist(last, pt) > 0.01) this.wallDraft.update((pts) => [...pts, pt]);
+      this.store.setStatus(
+        this.wallDraft().length < 2
+          ? 'Click the next wall point'
+          : 'Click to add a segment · double-click or Enter to finish',
+      );
+      return;
+    }
     if (tool === 'rect' || tool === 'circle' || tool === 'ellipse') {
       this.drag.set({ type: 'draw-shape', kind: tool, start: world });
       return;
@@ -1167,6 +1240,18 @@ export class Canvas {
         });
         return;
       }
+      if (hit.type === 'wall') {
+        const wall = this.store.plan().walls.find((w) => w.id === hit.id);
+        if (!wall) return;
+        this.drag.set({
+          type: 'move-wall',
+          id: wall.id,
+          origPoints: wall.points.map((pt) => ({ ...pt })),
+          start: world,
+          recorded: false,
+        });
+        return;
+      }
       if (hit.type === 'measurement') {
         const measurement = this.store.plan().measurements.find((item) => item.id === hit.id);
         if (!measurement) {
@@ -1199,6 +1284,12 @@ export class Canvas {
     }
   }
 
+  protected onDoubleClick(event: MouseEvent): void {
+    if (this.store.tool() === 'wall') {
+      event.preventDefault();
+      this.finishWallDraft();
+    }
+  }
   protected onPointerMove(event: PointerEvent): void {
     const world = this.clientToWorld(event);
     this.cursor.set(world);
@@ -1286,6 +1377,20 @@ export class Canvas {
       return;
     }
 
+    if (drag.type === 'move-wall') {
+      const rawDx = world.x - drag.start.x,
+        rawDy = world.y - drag.start.y;
+      if (!drag.recorded && Math.hypot(rawDx, rawDy) < moveThreshold) return;
+      if (!drag.recorded) {
+        this.store.beginEdit();
+        this.drag.set({ ...drag, recorded: true });
+      }
+      const { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
+      this.store.updateWall(drag.id, {
+        points: drag.origPoints.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })),
+      });
+      return;
+    }
     if (drag.type === 'move-measurement') {
       const rawDx = world.x - drag.start.x;
       const rawDy = world.y - drag.start.y;
@@ -1390,7 +1495,10 @@ export class Canvas {
     const tool = this.store.tool();
     const drag = this.drag();
     const wantsSnap =
-      tool === 'scale' || tool === 'measure' || drag.type === 'move-measurement-end';
+      tool === 'scale' ||
+      tool === 'measure' ||
+      tool === 'wall' ||
+      drag.type === 'move-measurement-end';
     const shift = event.shiftKey || this.shiftHeld();
     const zoom = this.store.plan().viewport.zoom;
     const enabled = wantsSnap && !shift;

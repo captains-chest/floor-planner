@@ -138,3 +138,29 @@ describe('PlanEdit', () => {
     expect(edit.plan.objects[0].width).toBe(1);
   });
 });
+
+describe('walls', () => {
+  it('adds, updates, scales, deletes and undoes walls', () => {
+    const edit = new PlanEdit();
+    const added = edit.addWall(
+      [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 2, y: 0 },
+      ],
+      0.2,
+    );
+    if (!('wall' in added)) throw new Error('wall not added');
+    expect(edit.plan.walls).toHaveLength(1);
+    expect(edit.plan.walls[0].points).toHaveLength(2);
+    edit.updateWall(added.wall.id, { thickness: 5 });
+    expect(edit.plan.walls[0].thickness).toBe(1);
+    edit.applyScale({ x: 0, y: 0 }, { x: 1, y: 0 }, 2);
+    expect(edit.plan.walls[0].points[1].x).toBeCloseTo(4);
+    expect(edit.plan.walls[0].thickness).toBeCloseTo(2);
+    edit.deleteSelection({ type: 'wall', id: added.wall.id });
+    expect(edit.plan.walls).toHaveLength(0);
+    expect(edit.undo()).toBe(true);
+    expect(edit.plan.walls).toHaveLength(1);
+  });
+});

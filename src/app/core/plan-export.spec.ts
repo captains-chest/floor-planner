@@ -94,6 +94,28 @@ describe('renderPlanSvg', () => {
     expect(svg).toContain('stroke="#0000ff" stroke-opacity="0.251"');
   });
 
+  it('draws walls as thick round-joined polylines', () => {
+    const svg = renderPlanSvg({
+      plan: plan({
+        walls: [
+          {
+            id: 'w',
+            points: [
+              { x: 0, y: 0 },
+              { x: 4, y: 0 },
+              { x: 4, y: 2 },
+            ],
+            thickness: 0.24,
+          },
+        ],
+      }),
+      imageDataUrl: null,
+      lengthUnit: 'm',
+    }).svg;
+    expect(svg).toContain('<polyline points="0,0 4,0 4,2"');
+    expect(svg).toContain('stroke-width="0.24"');
+    expect(svg).toContain('stroke-linejoin="round"');
+  });
   it('escapes the plan name in the title and header', () => {
     const { svg } = renderPlanSvg({ plan: plan(), imageDataUrl: null, lengthUnit: 'm' });
     expect(svg).toContain('<title>Flat &lt;2nd&gt; &amp; &quot;loft&quot;</title>');

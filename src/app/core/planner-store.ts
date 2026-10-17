@@ -7,6 +7,7 @@ import {
   Selection,
   ShapeKind,
   Tool,
+  Wall,
   Viewport,
 } from '../models/floor-plan';
 import { type Hit } from './geometry';
@@ -25,6 +26,7 @@ import {
   selectedMeasurement as measurementOf,
   selectedMeasurements as measurementsOf,
   selectedObject as objectOf,
+  selectedWall as wallOf,
   selectedPlacedObjects,
   selectFromHit as applySelectFromHit,
   selectionCount as countSelection,
@@ -85,6 +87,7 @@ export class PlannerStore {
 
   readonly selectedObject = computed(() => objectOf(this.#plan(), this.#selection()));
   readonly selectedMeasurement = computed(() => measurementOf(this.#plan(), this.#selection()));
+  readonly selectedWall = computed(() => wallOf(this.#plan(), this.#selection()));
   readonly selectedObjects = computed(() => selectedPlacedObjects(this.#plan(), this.#selection()));
   readonly selectedGroup = computed(() => groupOf(this.#plan(), this.#selection()));
   readonly selectedMeasurements = computed(() => measurementsOf(this.#plan(), this.#selection()));
@@ -390,6 +393,21 @@ export class PlannerStore {
     return null;
   }
 
+  addWall(points: Point[], thickness?: number): Wall | null {
+    const result = this.#edit.addWall(points, thickness);
+    this.#sync();
+    if ('wall' in result) {
+      this.#selection.set({ type: 'wall', id: result.wall.id });
+      this.#status.set('Wall added. Drag to move, or set thickness in Properties.');
+      return result.wall;
+    }
+    return null;
+  }
+  updateWall(id: string, patch: Partial<Pick<Wall, 'points' | 'thickness'>>): void {
+    this.#edit.updateWall(id, patch);
+    this.#sync();
+  }
+
   updateMeasurement(
     id: string,
     patch: Partial<Pick<Measurement, 'start' | 'end' | 'offset' | 'color'>>,
@@ -540,6 +558,8 @@ const toolHint = (tool: Tool): string => {
       return 'Click and drag to place a circle';
     case 'ellipse':
       return 'Click and drag to place an ellipse';
+    case 'wall':
+      return 'Click to add wall points · double-click or Enter to finish · Alt: 90° · Shift: snap off';
     default: {
       const _never: never = tool;
       return _never;

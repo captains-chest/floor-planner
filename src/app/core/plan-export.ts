@@ -1,4 +1,4 @@
-import { borderPaint, fillPaint, FloorPlan, PlacedObject } from '../models/floor-plan';
+import { borderPaint, fillPaint, FloorPlan, PlacedObject, Wall } from '../models/floor-plan';
 import { contentBBox, dimensionView, type BoundingBox } from './geometry';
 import { formatLength, type LengthUnit } from './units';
 
@@ -62,6 +62,7 @@ export function renderPlanSvg(
       `<image href="${esc(imageDataUrl)}" x="0" y="0" width="${n(imageSize.width)}" height="${n(imageSize.height)}" preserveAspectRatio="none"/>`,
     );
   }
+  for (const wall of plan.walls ?? []) parts.push(wallSvg(wall));
   for (const obj of plan.objects) {
     parts.push(objectSvg(obj, m(1), label));
   }
@@ -131,6 +132,10 @@ export function exportFilename(planName: string, extension: string): string {
   return `${slug || 'floor-plan'}.${extension}`;
 }
 
+function wallSvg(wall: Wall): string {
+  const pts = wall.points.map((pt) => `${n(pt.x)},${n(pt.y)}`).join(' ');
+  return `<polyline points="${pts}" fill="none" stroke="${INK}" stroke-width="${n(wall.thickness)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
 function objectSvg(obj: PlacedObject, hairline: number, label: number): string {
   const cx = obj.x + obj.width / 2;
   const cy = obj.y + obj.depth / 2;

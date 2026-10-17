@@ -5,6 +5,9 @@ import {
   Measurement,
   ObjectGroup,
   PlacedObject,
+  Point,
+  Wall,
+  clampWallThickness,
   normalizeColor,
 } from '../models/floor-plan';
 import { normalizeHelperSpacing } from './helper-grid';
@@ -158,6 +161,9 @@ function normalizePlan(raw: unknown): FloorPlan {
           .map(normalizeMeasurement)
           .filter((item): item is Measurement => item !== null)
       : [],
+    walls: Array.isArray(value.walls)
+      ? value.walls.map(normalizeWall).filter((w): w is Wall => w !== null)
+      : [],
     groups: Array.isArray(value.groups)
       ? value.groups.map(normalizeGroup).filter((item): item is ObjectGroup => item !== null)
       : [],
@@ -187,6 +193,14 @@ function normalizeBackground(raw: FloorPlan['background'] | undefined): FloorPla
   };
 }
 
+function normalizeWall(raw: unknown): Wall | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Partial<Wall>;
+  if (typeof value.id !== 'string' || !Array.isArray(value.points)) return null;
+  const points = value.points.map(normalizePoint).filter((pt): pt is Point => pt !== null);
+  if (points.length < 2) return null;
+  return { id: value.id, points, thickness: clampWallThickness(value.thickness) };
+}
 function normalizeGroup(raw: unknown): ObjectGroup | null {
   if (!raw || typeof raw !== 'object') {
     return null;
