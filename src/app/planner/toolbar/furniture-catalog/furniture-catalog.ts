@@ -1,10 +1,11 @@
 import { Component, computed, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { OBJECT_COLORS } from '../../../models/floor-plan';
 import {
-  CUPBOARD_DOOR_ID,
   filterFurniture,
+  furniturePreview,
   FURNITURE_CATEGORIES,
   type FurnitureItem,
+  type FurniturePreview,
 } from '../../../core/furniture';
 import { formatLength } from '../../../core/units';
 import { PlannerStore } from '../../../core/planner-store';
@@ -188,57 +189,47 @@ import { PlannerStore } from '../../../core/planner-store';
                       (click)="add(item)"
                     >
                       <svg viewBox="0 0 100 70" aria-hidden="true" focusable="false">
-                        @if (item.id === cupboardDoorId) {
-                          <!-- cupboard + door drawn below, exactly as placed -->
-                        } @else if (item.kind === 'circle') {
+                        @let pv = preview(item);
+                        @if (item.kind === 'circle') {
                           <ellipse
-                            cx="50"
-                            cy="35"
-                            [attr.rx]="preview(item).rx"
-                            [attr.ry]="preview(item).ry"
+                            [attr.cx]="pv.body.x + pv.body.w / 2"
+                            [attr.cy]="pv.body.y + pv.body.h / 2"
+                            [attr.rx]="pv.body.rx"
+                            [attr.ry]="pv.body.ry"
                             [attr.fill]="fill(item)"
                             fill-opacity="0.82"
                             stroke="#0d1117"
                           />
                         } @else {
                           <rect
-                            [attr.x]="preview(item).x"
-                            [attr.y]="preview(item).y"
-                            [attr.width]="preview(item).w"
-                            [attr.height]="preview(item).h"
+                            [attr.x]="pv.body.x"
+                            [attr.y]="pv.body.y"
+                            [attr.width]="pv.body.w"
+                            [attr.height]="pv.body.h"
                             [attr.fill]="fill(item)"
                             fill-opacity="0.82"
                             stroke="#0d1117"
                           />
                         }
-                        @if (item.id === cupboardDoorId) {
-                          <rect
-                            x="32"
-                            y="6"
-                            width="36"
-                            height="22"
-                            fill="#7eb8ff"
-                            fill-opacity="0.82"
-                            stroke="#0d1117"
-                          />
+                        @if (pv.door; as door) {
                           <line
-                            x1="32"
-                            y1="28"
-                            x2="68"
-                            y2="28"
+                            [attr.x1]="door.frontStart.x"
+                            [attr.y1]="door.frontStart.y"
+                            [attr.x2]="door.frontEnd.x"
+                            [attr.y2]="door.frontEnd.y"
                             stroke="#f5f7fa"
                             stroke-width="1.6"
                           />
                           <line
-                            x1="32"
-                            y1="28"
-                            x2="32"
-                            y2="64"
+                            [attr.x1]="door.hinge.x"
+                            [attr.y1]="door.hinge.y"
+                            [attr.x2]="door.leafEnd.x"
+                            [attr.y2]="door.leafEnd.y"
                             stroke="#f5f7fa"
                             stroke-width="1.6"
                           />
                           <path
-                            d="M 32 64 A 36 36 0 0 1 68 28"
+                            [attr.d]="door.arcPath"
                             fill="none"
                             stroke="#f5f7fa"
                             stroke-width="1.4"
@@ -267,7 +258,6 @@ export class FurnitureCatalog {
   protected readonly opened = signal(false);
   protected readonly query = signal('');
   protected readonly categories = FURNITURE_CATEGORIES;
-  protected readonly cupboardDoorId = CUPBOARD_DOOR_ID;
   protected readonly filtered = computed(() => filterFurniture(this.query()));
 
   protected itemsIn(category: string): FurnitureItem[] {
@@ -279,18 +269,8 @@ export class FurnitureCatalog {
   protected size(meters: number): string {
     return formatLength(meters, this.store.lengthUnit());
   }
-  protected preview(item: FurnitureItem): {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
-    rx: number;
-    ry: number;
-  } {
-    const scale = Math.min(80 / item.width, 48 / item.depth);
-    const w = item.width * scale,
-      h = item.depth * scale;
-    return { x: 50 - w / 2, y: 35 - h / 2, w, h, rx: w / 2, ry: h / 2 };
+  protected preview(item: FurnitureItem): FurniturePreview {
+    return furniturePreview(item);
   }
   protected open(): void {
     const d = this.dialog().nativeElement;

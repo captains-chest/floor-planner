@@ -5,6 +5,7 @@ import {
   FURNITURE_CATEGORIES,
   CUPBOARD_DOOR_ID,
   cupboardDoorPlacement,
+  furniturePreview,
   filterFurniture,
   furnitureById,
   furnitureObjectName,
@@ -61,6 +62,65 @@ describe('furniture library', () => {
     expect(edit.plan.objects).toHaveLength(0);
     expect(edit.plan.openings).toHaveLength(0);
     expect(edit.canUndo).toBe(false);
+  });
+
+  it('previews every item at its true proportions with one uniform scale', () => {
+    for (const item of FURNITURE) {
+      const pv = furniturePreview(item);
+      // Body ratio matches the placed footprint ratio (both should be width:depth).
+      expect(pv.body.w / pv.body.h).toBeCloseTo(item.width / item.depth, 6);
+      // One uniform scale on both axes - no stretching.
+      expect(pv.body.w / item.width).toBeCloseTo(pv.scale, 6);
+      expect(pv.body.h / item.depth).toBeCloseTo(pv.scale, 6);
+      // Preview fits and is centred in the 100x70 tile viewBox.
+      expect(pv.total.x).toBeGreaterThanOrEqual(0);
+      expect(pv.total.y).toBeGreaterThanOrEqual(0);
+      expect(pv.total.x + pv.total.w).toBeLessThanOrEqual(100.001);
+      expect(pv.total.y + pv.total.h).toBeLessThanOrEqual(70.001);
+      expect(pv.total.x + pv.total.w / 2).toBeCloseTo(50, 6);
+      expect(pv.total.y + pv.total.h / 2).toBeCloseTo(35, 6);
+      if (item.kind === 'circle') {
+        expect(pv.body.rx).toBeCloseTo(pv.body.ry, 6);
+      }
+      if (item.id !== CUPBOARD_DOOR_ID) {
+        expect(pv.door).toBeNull();
+        expect(pv.total.w).toBeCloseTo(pv.body.w, 6);
+        expect(pv.total.h).toBeCloseTo(pv.body.h, 6);
+      }
+    }
+  });
+
+  it('cupboard preview derives its door from the placement geometry, arc included', () => {
+    const item = furnitureById(CUPBOARD_DOOR_ID)!;
+    const pv = furniturePreview(item);
+    expect(pv.door).not.toBeNull();
+    const door = pv.door!;
+    // Body is 1.00 x 0.60 m at the preview scale.
+    expect(pv.body.w / pv.body.h).toBeCloseTo(item.width / item.depth, 6);
+    expect(pv.body.w).toBeCloseTo(item.width * pv.scale, 6);
+    expect(pv.body.h).toBeCloseTo(item.depth * pv.scale, 6);
+    // Hinged at the left end of the front (bottom) edge.
+    expect(door.hinge.x).toBeCloseTo(pv.body.x, 6);
+    expect(door.hinge.y).toBeCloseTo(pv.body.y + pv.body.h, 6);
+    expect(door.frontEnd.x).toBeCloseTo(pv.body.x + pv.body.w, 6);
+    expect(door.frontEnd.y).toBeCloseTo(door.hinge.y, 6);
+    // Leaf length and arc radius both equal the door width (= cupboard front width).
+    expect(door.leafEnd.x).toBeCloseTo(door.hinge.x, 6);
+    expect(door.leafEnd.y - door.hinge.y).toBeCloseTo(item.width * pv.scale, 6);
+    expect(door.radius).toBeCloseTo(item.width * pv.scale, 6);
+    expect(door.arcEnd).toEqual(door.frontEnd);
+    expect(door.arcPath).toContain(`A ${door.radius} ${door.radius} 0 0 1`);
+    // Total bounding box includes the arc: width = front width, height = depth + door width.
+    expect(pv.total.w).toBeCloseTo(item.width * pv.scale, 6);
+    expect(pv.total.h).toBeCloseTo((item.depth + item.width) * pv.scale, 6);
+    expect(pv.total.y + pv.total.h).toBeCloseTo(door.leafEnd.y, 6);
+  });
+
+  it('cupboard preview follows a different cupboard size (no hardcoded tile geometry)', () => {
+    const pv = furniturePreview({ id: CUPBOARD_DOOR_ID, width: 2, depth: 1 });
+    expect(pv.body.w / pv.body.h).toBeCloseTo(2, 6);
+    expect(pv.door!.radius).toBeCloseTo(2 * pv.scale, 6);
+    expect(pv.total.h).toBeCloseTo(3 * pv.scale, 6);
   });
 
   it('has unique ids, known categories and positive real-world sizes', () => {

@@ -160,6 +160,97 @@ export function cupboardDoorPlacement(obj: {
   };
 }
 
+export interface FurniturePreviewPoint {
+  x: number;
+  y: number;
+}
+export interface FurniturePreview {
+  /** Body footprint in tile coordinates. For circles rx/ry are its radii. */
+  body: { x: number; y: number; w: number; h: number; rx: number; ry: number };
+  /** Door drawn on the body front edge (cupboard-with-door only), in tile coordinates. */
+  door: {
+    hinge: FurniturePreviewPoint;
+    leafEnd: FurniturePreviewPoint;
+    arcEnd: FurniturePreviewPoint;
+    frontStart: FurniturePreviewPoint;
+    frontEnd: FurniturePreviewPoint;
+    arcPath: string;
+    radius: number;
+  } | null;
+  /** Full bounding box in tile coordinates, including the swing arc when present. */
+  total: { x: number; y: number; w: number; h: number };
+  /** Tile units per metre (uniform on both axes). */
+  scale: number;
+}
+
+/**
+ * Preview geometry for a catalog tile, computed from the exact placed geometry so the tile
+ * cannot drift from what gets placed: the body is the item footprint, and the cupboard door
+ * comes from cupboardDoorPlacement at the origin, hinged at the left end of the front edge,
+ * swinging outward (downward on screen) with leaf and arc radius equal to the door width.
+ * Everything, arc included, is scaled uniformly to fit and be centred in the tile viewBox.
+ */
+export function furniturePreview(
+  item: Pick<FurnitureItem, 'id' | 'width' | 'depth'>,
+  viewWidth = 100,
+  viewHeight = 70,
+  inset = 6,
+): FurniturePreview {
+  let doorWorld: (FurniturePreview['door'] & { radiusWorld: number }) | null = null;
+  let maxY = item.depth;
+  if (item.id === CUPBOARD_DOOR_ID) {
+    const placed = cupboardDoorPlacement({ x: 0, y: 0, width: item.width, depth: item.depth });
+    const hingeWorld = { x: placed.center.x - placed.width / 2, y: placed.center.y };
+    const leafEndWorld = { x: hingeWorld.x, y: hingeWorld.y + placed.width };
+    const arcEndWorld = { x: placed.center.x + placed.width / 2, y: placed.center.y };
+    maxY = Math.max(maxY, leafEndWorld.y);
+    doorWorld = {
+      hinge: hingeWorld,
+      leafEnd: leafEndWorld,
+      arcEnd: arcEndWorld,
+      frontStart: hingeWorld,
+      frontEnd: arcEndWorld,
+      arcPath: '',
+      radius: placed.width,
+      radiusWorld: placed.width,
+    };
+  }
+  const bboxW = item.width;
+  const bboxH = maxY;
+  const scale = Math.min((viewWidth - 2 * inset) / bboxW, (viewHeight - 2 * inset) / bboxH);
+  const offX = (viewWidth - bboxW * scale) / 2;
+  const offY = (viewHeight - bboxH * scale) / 2;
+  const toTile = (pt: FurniturePreviewPoint): FurniturePreviewPoint => ({
+    x: offX + pt.x * scale,
+    y: offY + pt.y * scale,
+  });
+  const bodyW = item.width * scale;
+  const bodyH = item.depth * scale;
+  const bodyOrigin = toTile({ x: 0, y: 0 });
+  let door: FurniturePreview['door'] = null;
+  if (doorWorld) {
+    const hingeT = toTile(doorWorld.hinge);
+    const leafEndT = toTile(doorWorld.leafEnd);
+    const arcEndT = toTile(doorWorld.arcEnd);
+    const radius = doorWorld.radiusWorld * scale;
+    door = {
+      hinge: hingeT,
+      leafEnd: leafEndT,
+      arcEnd: arcEndT,
+      frontStart: hingeT,
+      frontEnd: arcEndT,
+      arcPath: `M ${leafEndT.x} ${leafEndT.y} A ${radius} ${radius} 0 0 1 ${arcEndT.x} ${arcEndT.y}`,
+      radius,
+    };
+  }
+  return {
+    body: { x: bodyOrigin.x, y: bodyOrigin.y, w: bodyW, h: bodyH, rx: bodyW / 2, ry: bodyH / 2 },
+    door,
+    total: { x: offX, y: offY, w: bboxW * scale, h: bboxH * scale },
+    scale,
+  };
+}
+
 export function filterFurniture(query: string): readonly FurnitureItem[] {
   const q = query.trim().toLowerCase();
   if (!q) return FURNITURE;
