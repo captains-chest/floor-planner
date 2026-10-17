@@ -22,11 +22,15 @@ export type BoxSelectMode = 'window' | 'crossing';
 export interface BoxPick {
   objectIds: string[];
   measurementIds: string[];
+  wallIds: string[];
+  openingIds: string[];
 }
 
 export const emptyPick = (): BoxPick => ({
   objectIds: [],
   measurementIds: [],
+  wallIds: [],
+  openingIds: [],
 });
 
 export const boxSelectMode = (start: Point, current: Point): BoxSelectMode =>
@@ -90,11 +94,35 @@ export const selectedOpening = (plan: FloorPlan, selected: Selection): Opening |
 export const selectedWall = (plan: FloorPlan, selected: Selection): Wall | null =>
   selected?.type === 'wall' ? ((plan.walls ?? []).find((w) => w.id === selected.id) ?? null) : null;
 
+export const selectedWalls = (plan: FloorPlan, selected: Selection): Wall[] => {
+  if (selected?.type === 'wall') {
+    const wall = (plan.walls ?? []).find((w) => w.id === selected.id);
+    return wall ? [wall] : [];
+  }
+  if (selected?.type === 'multi') {
+    const ids = new Set(selected.wallIds ?? []);
+    return (plan.walls ?? []).filter((w) => ids.has(w.id));
+  }
+  return [];
+};
+
+export const selectedOpenings = (plan: FloorPlan, selected: Selection): Opening[] => {
+  if (selected?.type === 'opening') {
+    const opening = (plan.openings ?? []).find((o) => o.id === selected.id);
+    return opening ? [opening] : [];
+  }
+  if (selected?.type === 'multi') {
+    const ids = new Set(selected.openingIds ?? []);
+    return (plan.openings ?? []).filter((o) => ids.has(o.id));
+  }
+  return [];
+};
+
 export const selectionCount = (plan: FloorPlan, selected: Selection): number =>
   selectedPlacedObjects(plan, selected).length +
   selectedMeasurements(plan, selected).length +
-  (selectedWall(plan, selected) ? 1 : 0) +
-  (selectedOpening(plan, selected) ? 1 : 0);
+  selectedWalls(plan, selected).length +
+  selectedOpenings(plan, selected).length;
 
 export const isObjectSelected = (plan: FloorPlan, selected: Selection, id: string): boolean =>
   selectedPlacedObjects(plan, selected).some((obj) => obj.id === id);
@@ -147,7 +175,30 @@ export const collectBoxSelection = (plan: FloorPlan, start: Point, current: Poin
     }
   }
 
-  return { objectIds, measurementIds };
+  const wallIds: string[] = [];
+  for (const wall of plan.walls ?? []) {
+    const segments = wallSegmentsOf(wall);
+    const hit = windowMode
+      ? wall.points.every((pt) => pointStrictlyInside(pt, box))
+      : segments.some(([a, b]) => segmentCrossesBox(a, b, box)) ||
+        wall.points.some((pt) => pointInsideInclusive(pt, box));
+    if (hit && segments.length > 0) {
+      wallIds.push(wall.id);
+    }
+  }
+
+  const openingIds: string[] = [];
+  for (const opening of plan.openings ?? []) {
+    const [a, b] = openingSpan(opening);
+    const hit = windowMode
+      ? segmentFullyInside(a, b, box)
+      : segmentCrossesBox(a, b, box) || pointInsideInclusive(opening.center, box);
+    if (hit) {
+      openingIds.push(opening.id);
+    }
+  }
+
+  return { objectIds, measurementIds, wallIds, openingIds };
 };
 
 export const pickFromSelection = (plan: FloorPlan, selection: Selection): BoxPick => {
@@ -170,26 +221,43 @@ export const pickFromSelection = (plan: FloorPlan, selection: Selection): BoxPic
   if (selection.type === 'measurement') {
     return { ...empty, measurementIds: [selection.id] };
   }
-  if (selection.type === 'wall') return empty;
-  if (selection.type === 'opening') return empty;
+  if (selection.type === 'wall') return { ...empty, wallIds: [selection.id] };
+  if (selection.type === 'opening') return { ...empty, openingIds: [selection.id] };
   return {
     objectIds: [...selection.objectIds],
     measurementIds: [...selection.measurementIds],
+    wallIds: [...(selection.wallIds ?? [])],
+    openingIds: [...(selection.openingIds ?? [])],
   };
 };
 
 export const mergePicks = (a: BoxPick, b: BoxPick): BoxPick => ({
   objectIds: uniqueIds([...a.objectIds, ...b.objectIds]),
   measurementIds: uniqueIds([...a.measurementIds, ...b.measurementIds]),
+  wallIds: uniqueIds([...(a.wallIds ?? []), ...(b.wallIds ?? [])]),
+  openingIds: uniqueIds([...(a.openingIds ?? []), ...(b.openingIds ?? [])]),
 });
 
 export const collapsePick = (plan: FloorPlan, pick: BoxPick): Selection => {
   const objects = pick.objectIds.length;
   const measurements = pick.measurementIds.length;
-  const kinds = (objects > 0 ? 1 : 0) + (measurements > 0 ? 1 : 0);
-  if (kinds === 0) {
+  const walls = (pick.wallIds ?? []).length;
+  const openings = (pick.openingIds ?? []).length;
+  const total = objects + measurements + walls + openings;
+  if (total === 0) {
     return null;
   }
+  if (total === 1 && walls === 1) {
+    return { type: 'wall', id: pick.wallIds[0] };
+  }
+  if (total === 1 && openings === 1) {
+    return { type: 'opening', id: pick.openingIds[0] };
+  }
+  const kinds =
+    (objects > 0 ? 1 : 0) +
+    (measurements > 0 ? 1 : 0) +
+    (walls > 0 ? 1 : 0) +
+    (openings > 0 ? 1 : 0);
   if (kinds === 1 && objects > 0) {
     return selectionFromObjectIds(plan, pick.objectIds);
   }
@@ -200,6 +268,8 @@ export const collapsePick = (plan: FloorPlan, pick: BoxPick): Selection => {
     type: 'multi',
     objectIds: pick.objectIds,
     measurementIds: pick.measurementIds,
+    wallIds: pick.wallIds ?? [],
+    openingIds: pick.openingIds ?? [],
   };
 };
 
@@ -401,4 +471,20 @@ const onSegment = (a: Point, b: Point, p: Point): boolean => {
     p.y >= Math.min(a.y, b.y) - eps &&
     p.y <= Math.max(a.y, b.y) + eps
   );
+};
+
+const wallSegmentsOf = (wall: Wall): [Point, Point][] => {
+  const out: [Point, Point][] = [];
+  for (let i = 1; i < wall.points.length; i++) out.push([wall.points[i - 1], wall.points[i]]);
+  return out;
+};
+
+const openingSpan = (opening: Opening): [Point, Point] => {
+  const rad = ((opening.rotation ?? 0) * Math.PI) / 180;
+  const dx = (Math.cos(rad) * opening.width) / 2;
+  const dy = (Math.sin(rad) * opening.width) / 2;
+  return [
+    { x: opening.center.x - dx, y: opening.center.y - dy },
+    { x: opening.center.x + dx, y: opening.center.y + dy },
+  ];
 };

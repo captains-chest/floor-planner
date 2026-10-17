@@ -19,7 +19,8 @@ import {
   clampWallThickness,
   DEFAULT_WALL_THICKNESS,
 } from '../models/floor-plan';
-import { clamp, contentBBox, dist, scalePoint } from './geometry';
+import { clamp, contentBBox, dist, scalePoint, wallSegments } from './geometry';
+import { followAttachedOpenings, objectEdgeSegments } from './openings';
 import { selectionFromObjectIds, selectedPlacedObjects } from './selection';
 
 export type StackDirection = 'front' | 'back' | 'forward' | 'backward';
@@ -233,25 +234,32 @@ export class PlanEdit {
 
   updateObject(id: string, patch: Partial<PlacedObject>): void {
     this.#record();
-    this.#plan = {
-      ...this.#plan,
-      objects: this.#plan.objects.map((obj) => {
-        if (obj.id !== id) {
-          return obj;
+    const before = this.#plan.objects.find((obj) => obj.id === id);
+    let after: PlacedObject | undefined;
+    const objects = this.#plan.objects.map((obj) => {
+      if (obj.id !== id) {
+        return obj;
+      }
+      const next = { ...obj, ...patch };
+      if (next.kind === 'circle') {
+        if (patch.width != null) {
+          next.depth = next.width;
+        } else if (patch.depth != null) {
+          next.width = next.depth;
         }
-        const next = { ...obj, ...patch };
-        if (next.kind === 'circle') {
-          if (patch.width != null) {
-            next.depth = next.width;
-          } else if (patch.depth != null) {
-            next.width = next.depth;
-          }
-        }
-        next.width = Math.max(0.01, next.width);
-        next.depth = Math.max(0.01, next.depth);
-        return next;
-      }),
-    };
+      }
+      next.width = Math.max(0.01, next.width);
+      next.depth = Math.max(0.01, next.depth);
+      after = next;
+      return next;
+    });
+    this.#plan = { ...this.#plan, objects };
+    if (before && after) {
+      this.#followHosts(
+        new Map([[`object:${id}`, objectEdgeSegments(before)]]),
+        new Map([[`object:${id}`, objectEdgeSegments(after)]]),
+      );
+    }
   }
 
   applyObjectPoses(poses: readonly ObjectPose[]): void {
@@ -260,16 +268,23 @@ export class PlanEdit {
     }
     this.#record();
     const byId = new Map(poses.map((pose) => [pose.id, pose]));
-    this.#plan = {
-      ...this.#plan,
-      objects: this.#plan.objects.map((obj) => {
-        const pose = byId.get(obj.id);
-        if (!pose) {
-          return obj;
-        }
-        return { ...obj, x: pose.x, y: pose.y, rotation: pose.rotation ?? obj.rotation };
-      }),
-    };
+    const hostsBefore = new Map<string, [Point, Point][]>();
+    for (const obj of this.#plan.objects) {
+      if (byId.has(obj.id)) hostsBefore.set(`object:${obj.id}`, objectEdgeSegments(obj));
+    }
+    const objects = this.#plan.objects.map((obj) => {
+      const pose = byId.get(obj.id);
+      if (!pose) {
+        return obj;
+      }
+      return { ...obj, x: pose.x, y: pose.y, rotation: pose.rotation ?? obj.rotation };
+    });
+    this.#plan = { ...this.#plan, objects };
+    const hostsAfter = new Map<string, [Point, Point][]>();
+    for (const obj of objects) {
+      if (byId.has(obj.id)) hostsAfter.set(`object:${obj.id}`, objectEdgeSegments(obj));
+    }
+    this.#followHosts(hostsBefore, hostsAfter);
   }
 
   groupSelection(selection: Selection): PlanEditResult {
@@ -309,6 +324,7 @@ export class PlanEdit {
       width?: number;
       rotation?: number;
       wallId?: string | null;
+      objectId?: string | null;
       flipH?: boolean;
       flipV?: boolean;
     } = {},
@@ -322,6 +338,7 @@ export class PlanEdit {
       flipH: Boolean(opts.flipH),
       flipV: Boolean(opts.flipV),
       wallId: opts.wallId ?? null,
+      objectId: opts.objectId ?? null,
     };
     this.#record();
     this.#plan = { ...this.#plan, openings: [...(this.#plan.openings ?? []), opening] };
@@ -378,6 +395,7 @@ export class PlanEdit {
       id: createId(o.kind),
       center: { x: o.center.x + offset, y: o.center.y + offset },
       wallId: null,
+      objectId: null,
     }));
     this.#record();
     this.#plan = {
@@ -511,21 +529,40 @@ export class PlanEdit {
     return { wall };
   }
 
-  updateWall(id: string, patch: Partial<Pick<Wall, 'points' | 'thickness'>>): void {
+  updateWall(id: string, patch: Partial<Pick<Wall, 'points' | 'thickness' | 'color'>>): void {
     this.#record();
-    this.#plan = {
-      ...this.#plan,
-      walls: (this.#plan.walls ?? []).map((w) =>
-        w.id === id
-          ? {
-              ...w,
-              ...patch,
-              thickness: clampWallThickness(patch.thickness ?? w.thickness),
-              points: patch.points ? patch.points.map((pt) => ({ ...pt })) : w.points,
-            }
-          : w,
-      ),
-    };
+    const before = (this.#plan.walls ?? []).find((w) => w.id === id);
+    let after: Wall | undefined;
+    const walls = (this.#plan.walls ?? []).map((w) => {
+      if (w.id !== id) return w;
+      const next: Wall = {
+        ...w,
+        ...patch,
+        thickness: clampWallThickness(patch.thickness ?? w.thickness),
+        points: patch.points ? patch.points.map((pt) => ({ ...pt })) : w.points,
+      };
+      after = next;
+      return next;
+    });
+    this.#plan = { ...this.#plan, walls };
+    if (before && after && patch.points) {
+      this.#followHosts(
+        new Map([[`wall:${id}`, wallSegments(before)]]),
+        new Map([[`wall:${id}`, wallSegments(after)]]),
+      );
+    }
+  }
+
+  /** Moves openings attached to changed hosts so they keep their place along the host. */
+  #followHosts(
+    hostsBefore: ReadonlyMap<string, [Point, Point][]>,
+    hostsAfter: ReadonlyMap<string, [Point, Point][]>,
+  ): void {
+    if (hostsBefore.size === 0) return;
+    const openings = followAttachedOpenings(this.#plan.openings ?? [], hostsBefore, hostsAfter);
+    if (openings.some((o, i) => o !== (this.#plan.openings ?? [])[i])) {
+      this.#plan = { ...this.#plan, openings };
+    }
   }
 
   deleteSelection(selection: Selection): PlanEditResult {
@@ -744,11 +781,21 @@ const removeSelection = (plan: FloorPlan, selection: Selection): FloorPlan => {
   }
   if (selection.type === 'multi') {
     let next = removeObjects(plan, new Set(selection.objectIds));
+    const wallIds = new Set(selection.wallIds ?? []);
+    const openingIds = new Set(selection.openingIds ?? []);
     next = {
       ...next,
       measurements: (next.measurements ?? []).filter(
         (item) => !selection.measurementIds.includes(item.id),
       ),
+      walls: (next.walls ?? []).filter((item) => !wallIds.has(item.id)),
+      openings: (next.openings ?? [])
+        .filter((o) => !openingIds.has(o.id))
+        .map((o) => ({
+          ...o,
+          wallId: o.wallId && wallIds.has(o.wallId) ? null : o.wallId,
+          objectId: o.objectId && selection.objectIds.includes(o.objectId) ? null : o.objectId,
+        })),
     };
     return next;
   }
@@ -764,6 +811,9 @@ const removeObjects = (plan: FloorPlan, ids: Set<string>): FloorPlan => {
     ...plan,
     objects,
     groups: (plan.groups ?? []).filter((group) => usedGroups.has(group.id)),
+    openings: (plan.openings ?? []).map((o) =>
+      o.objectId && ids.has(o.objectId) ? { ...o, objectId: null } : o,
+    ),
   };
 };
 

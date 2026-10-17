@@ -206,4 +206,47 @@ describe('walls persistence', () => {
     });
     expect(old!.plan.walls).toEqual([]);
   });
+
+  it('keeps a valid wall color, drops an invalid one (older saves stay black by default)', () => {
+    const base = {
+      kind: PROJECT_KIND,
+      formatVersion: 1,
+      plan: {
+        version: 1,
+        name: 'W',
+        objects: [],
+        measurements: [],
+        groups: [],
+        viewport: { panX: 0, panY: 0, zoom: 40 },
+      },
+    };
+    const colored = parseProjectDocument({
+      ...base,
+      plan: {
+        ...base.plan,
+        walls: [
+          {
+            id: 'w1',
+            points: [
+              { x: 0, y: 0 },
+              { x: 2, y: 0 },
+            ],
+            thickness: 0.2,
+            color: '#FF000080',
+          },
+          {
+            id: 'w2',
+            points: [
+              { x: 0, y: 1 },
+              { x: 2, y: 1 },
+            ],
+            thickness: 0.2,
+            color: 'not-a-color',
+          },
+        ],
+      },
+    });
+    expect(colored!.plan.walls[0].color).toBe('#ff000080');
+    expect(colored!.plan.walls[1].color).toBeUndefined();
+  });
 });

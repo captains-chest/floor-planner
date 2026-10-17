@@ -7,6 +7,7 @@ import {
   colorWithOpacity,
   objectColor,
   opacityPercent,
+  wallColor,
 } from '../../models/floor-plan';
 import { PlannerStore } from '../../core/planner-store';
 import {
@@ -350,6 +351,51 @@ import { StackOrder } from './stack-order/stack-order';
             [value]="display(wall.thickness)"
             (change)="setWallThickness(wall.id, $event)"
         /></label>
+        <div class="color-row">
+          <label for="wall-color">Color</label>
+          <input
+            id="wall-color"
+            type="color"
+            [value]="wallColor(wall)"
+            (focus)="store.beginEdit()"
+            (input)="setWallColor(wall.id, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <button
+            type="button"
+            class="transparent"
+            aria-label="Transparent wall color"
+            [attr.aria-pressed]="wallOpacity(wall) === 0"
+            (click)="setWallTransparent(wall.id)"
+          ></button>
+          @if (wall.color) {
+            <button
+              type="button"
+              class="action"
+              (click)="store.updateWall(wall.id, { color: undefined })"
+            >
+              Reset color
+            </button>
+          }
+        </div>
+        <div class="opacity-row">
+          <label for="wall-opacity">Wall opacity</label>
+          <input
+            id="wall-opacity"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            [value]="wallOpacity(wall)"
+            [attr.aria-valuetext]="wallOpacity(wall) + '%'"
+            (focus)="store.beginEdit()"
+            (input)="setWallOpacity(wall, $event)"
+            (change)="store.endEdit()"
+            (blur)="store.endEdit()"
+          />
+          <output for="wall-opacity">{{ wallOpacity(wall) }}%</output>
+        </div>
         <p class="empty">
           Drag the wall to move it. Thickness is in real-world units from the plan scale.
         </p>
@@ -357,7 +403,13 @@ import { StackOrder } from './stack-order/stack-order';
       } @else if (store.selectedOpening(); as opening) {
         <p class="metric">
           {{ opening.kind === 'door' ? 'Door' : 'Window' }} ·
-          {{ opening.wallId ? 'Snapped to a wall' : 'Free-standing' }}
+          {{
+            opening.wallId
+              ? 'Snapped to a wall'
+              : opening.objectId
+                ? 'Snapped to an object'
+                : 'Free-standing'
+          }}
         </p>
         <label
           >Width ({{ store.lengthUnit() }})<input
@@ -493,6 +545,26 @@ export class Inspector {
   protected setWallThickness(id: string, event: Event): void {
     const v = this.lengthValue(event);
     if (v > 0) this.store.updateWall(id, { thickness: v });
+  }
+  protected readonly wallColor = wallColor;
+  protected wallOpacity(wall: { color?: string }): number {
+    return opacityPercent(wall.color, 100);
+  }
+  protected setWallColor(id: string, event: Event): void {
+    const color = normalizeColor(this.inputValue(event));
+    const wall = this.store.selectedWall();
+    if (color && wall) {
+      const pct = this.wallOpacity(wall);
+      this.store.updateWall(id, { color: colorWithOpacity(color, pct > 0 ? pct : 100) });
+    }
+  }
+  protected setWallOpacity(wall: { id: string; color?: string }, event: Event): void {
+    const pct = this.numberValue(event);
+    this.store.updateWall(wall.id, { color: colorWithOpacity(wallColor(wall), pct) });
+  }
+  protected setWallTransparent(id: string): void {
+    this.store.updateWall(id, { color: 'transparent' });
+    this.store.endEdit();
   }
   protected setObjectColor(id: string, event: Event): void {
     const color = normalizeColor(this.inputValue(event));

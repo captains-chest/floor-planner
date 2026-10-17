@@ -58,6 +58,20 @@ export interface Wall {
   id: string;
   points: Point[];
   thickness: number;
+  /** Custom wall color: #rrggbb, #rrggbbaa or 'transparent'. When missing, the wall is black. */
+  color?: string;
+}
+export const DEFAULT_WALL_COLOR = '#000000';
+/** Solid hex for a wall's stored color (black when unset or invalid). */
+export function wallColor(wall: Pick<Wall, 'color'>): string {
+  return parseColor(wall.color, DEFAULT_WALL_COLOR).hex;
+}
+/** Canvas/export paint for a wall: 'none' at 0% opacity, otherwise hex + opacity. */
+export function wallPaint(wall: Pick<Wall, 'color'>): { stroke: string; opacity: number } {
+  const parsed = parseColor(wall.color, DEFAULT_WALL_COLOR);
+  return parsed.alpha <= 0
+    ? { stroke: 'none', opacity: 0 }
+    : { stroke: parsed.hex, opacity: parsed.alpha };
 }
 export const DEFAULT_WALL_THICKNESS = 0.15;
 export const MIN_WALL_THICKNESS = 0.02;
@@ -81,6 +95,8 @@ export interface Opening {
   flipV?: boolean;
   /** Wall this opening is snapped into, if any. Rendering cuts that wall at the span. */
   wallId?: string | null;
+  /** Object this opening is snapped to (e.g. a door on a cupboard edge), if any. */
+  objectId?: string | null;
 }
 export const DEFAULT_DOOR_WIDTH = 0.9;
 export const DEFAULT_WINDOW_WIDTH = 1.2;
@@ -128,6 +144,8 @@ export type Selection =
       type: 'multi';
       objectIds: string[];
       measurementIds: string[];
+      wallIds: string[];
+      openingIds: string[];
     }
   | null;
 

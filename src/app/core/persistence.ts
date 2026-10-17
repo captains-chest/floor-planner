@@ -215,6 +215,7 @@ function normalizeOpening(raw: unknown): Opening | null {
     flipH: Boolean(value.flipH),
     flipV: Boolean(value.flipV),
     wallId: typeof value.wallId === 'string' ? value.wallId : null,
+    objectId: typeof value.objectId === 'string' ? value.objectId : null,
   };
 }
 function normalizeWall(raw: unknown): Wall | null {
@@ -223,7 +224,13 @@ function normalizeWall(raw: unknown): Wall | null {
   if (typeof value.id !== 'string' || !Array.isArray(value.points)) return null;
   const points = value.points.map(normalizePoint).filter((pt): pt is Point => pt !== null);
   if (points.length < 2) return null;
-  return { id: value.id, points, thickness: clampWallThickness(value.thickness) };
+  const color = value.color === 'transparent' ? 'transparent' : normalizeColor(value.color);
+  return {
+    id: value.id,
+    points,
+    thickness: clampWallThickness(value.thickness),
+    ...(color ? { color } : {}),
+  };
 }
 function normalizeGroup(raw: unknown): ObjectGroup | null {
   if (!raw || typeof raw !== 'object') {

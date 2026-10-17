@@ -94,7 +94,7 @@ describe('renderPlanSvg', () => {
     expect(svg).toContain('stroke="#0000ff" stroke-opacity="0.251"');
   });
 
-  it('draws walls as thick round-joined polylines', () => {
+  it('draws walls as thick square-joined polylines, black by default', () => {
     const svg = renderPlanSvg({
       plan: plan({
         walls: [
@@ -112,9 +112,33 @@ describe('renderPlanSvg', () => {
       imageDataUrl: null,
       lengthUnit: 'm',
     }).svg;
-    expect(svg).toContain('<line x1="0" y1="0" x2="4" y2="0"');
+    expect(svg).toContain('<polyline points="0,0 4,0 4,2"');
+    expect(svg).toContain('stroke="#000000"');
     expect(svg).toContain('stroke-width="0.24"');
-    expect(svg).toContain('stroke-linecap="round"');
+    expect(svg).toContain('stroke-linecap="square"');
+    expect(svg).toContain('stroke-linejoin="miter"');
+    expect(svg).not.toContain('stroke-linecap="round"');
+  });
+
+  it('exports a wall in its chosen color and opacity', () => {
+    const svg = renderPlanSvg({
+      plan: plan({
+        walls: [
+          {
+            id: 'w',
+            points: [
+              { x: 0, y: 0 },
+              { x: 4, y: 0 },
+            ],
+            thickness: 0.2,
+            color: '#ff000080',
+          },
+        ],
+      }),
+      imageDataUrl: null,
+      lengthUnit: 'm',
+    }).svg;
+    expect(svg).toContain('stroke="#ff0000" stroke-opacity="0.502"');
   });
   it('escapes the plan name in the title and header', () => {
     const { svg } = renderPlanSvg({ plan: plan(), imageDataUrl: null, lengthUnit: 'm' });

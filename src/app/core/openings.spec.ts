@@ -46,6 +46,7 @@ describe('opening snapping', () => {
     const snap = snapOpening({ x: 2, y: 1.9 }, [], [cupboard], 0.3, true);
     expect(snap.target).toBe('object');
     expect(snap.wallId).toBeNull();
+    expect(snap.objectId).toBe('c1');
     expect(snap.center.y).toBeCloseTo(2);
     expect(snap.rotation).toBeCloseTo(0);
   });
@@ -133,5 +134,89 @@ describe('openings persistence and edit', () => {
     expect(svg).toContain('scale(-1 -1)');
     expect(svg).toContain('<rect x="-0.6" y="-0.075" width="1.2"');
     expect(svg).not.toContain('<line x1="1.55" y1="0" x2="2.45" y2="0"');
+  });
+});
+
+describe('attached openings follow their host', () => {
+  const planWithDoorOnWall = () => ({
+    ...createDefaultPlan(),
+    walls: [wall],
+    openings: [door()],
+  });
+  it('moves a wall-snapped door with the wall, as one undo step', () => {
+    const edit = new PlanEdit(planWithDoorOnWall(), null);
+    edit.beginEdit();
+    edit.updateWall('w1', {
+      points: wall.points.map((pt) => ({ x: pt.x + 1, y: pt.y + 0.5 })),
+    });
+    edit.endEdit();
+    expect(edit.plan.walls[0].points[0]).toEqual({ x: 1, y: 0.5 });
+    expect(edit.plan.openings[0].center).toEqual({ x: 3, y: 0.5 });
+    expect(edit.plan.openings[0].wallId).toBe('w1');
+    expect(edit.undo()).toBe(true);
+    expect(edit.plan.walls[0].points[0]).toEqual({ x: 0, y: 0 });
+    expect(edit.plan.openings[0].center).toEqual({ x: 2, y: 0 });
+    expect(edit.canUndo).toBe(false);
+  });
+  it('keeps an opening’s place along the wall when the wall rotates', () => {
+    const edit = new PlanEdit(planWithDoorOnWall(), null);
+    edit.updateWall('w1', {
+      points: [
+        { x: 0, y: 0 },
+        { x: 0, y: 4 },
+      ],
+    });
+    // Door was halfway along the horizontal wall; now halfway along the vertical one.
+    expect(edit.plan.openings[0].center.x).toBeCloseTo(0);
+    expect(edit.plan.openings[0].center.y).toBeCloseTo(2);
+    expect(edit.plan.openings[0].rotation).toBeCloseTo(90);
+  });
+  it('moves an object-snapped door with the object (move and resize)', () => {
+    const edit = new PlanEdit(
+      {
+        ...createDefaultPlan(),
+        objects: [cupboard],
+        openings: [
+          {
+            id: 'd1',
+            kind: 'door' as const,
+            center: { x: 2, y: 2 },
+            width: 2,
+            rotation: 0,
+            wallId: null,
+            objectId: 'c1',
+          },
+        ],
+      },
+      null,
+    );
+    edit.applyObjectPoses([{ id: 'c1', x: 3, y: 4 }]);
+    expect(edit.plan.openings[0].center).toEqual({ x: 4, y: 4 });
+    // Resizing the cupboard wider keeps the door proportionally on its top edge.
+    edit.updateObject('c1', { width: 4 });
+    expect(edit.plan.openings[0].center.x).toBeCloseTo(5);
+    expect(edit.plan.openings[0].center.y).toBeCloseTo(4);
+  });
+  it('detaches an object-snapped door when the object is deleted', () => {
+    const edit = new PlanEdit(
+      {
+        ...createDefaultPlan(),
+        objects: [cupboard],
+        openings: [
+          {
+            id: 'd1',
+            kind: 'door' as const,
+            center: { x: 2, y: 2 },
+            width: 2,
+            rotation: 0,
+            wallId: null,
+            objectId: 'c1',
+          },
+        ],
+      },
+      null,
+    );
+    edit.deleteSelection({ type: 'object', id: 'c1' });
+    expect(edit.plan.openings[0].objectId).toBeNull();
   });
 });

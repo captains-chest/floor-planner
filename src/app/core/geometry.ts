@@ -189,6 +189,104 @@ export function snapObjectMove(
   return bestCorner;
 }
 
+export interface WallSnap {
+  point: Point;
+  snapped: boolean;
+  kind: 'none' | 'wall-endpoint' | 'wall-segment';
+}
+
+/**
+ * Snaps a point to other walls: endpoints win over segment projections, both within
+ * `threshold`. `extraSegments` lets the wall being drawn snap to its own draft polyline.
+ */
+export function snapWallPoint(
+  p: Point,
+  walls: readonly Wall[],
+  threshold: number,
+  enabled: boolean,
+  extraSegments: readonly [Point, Point][] = [],
+): WallSnap {
+  const none: WallSnap = { point: { ...p }, snapped: false, kind: 'none' };
+  if (!enabled || threshold <= 0) return none;
+  let bestEndpoint: { point: Point; distance: number } | null = null;
+  for (const wall of walls) {
+    for (const pt of wall.points) {
+      const d = dist(p, pt);
+      if (d <= threshold && (!bestEndpoint || d < bestEndpoint.distance)) {
+        bestEndpoint = { point: { ...pt }, distance: d };
+      }
+    }
+  }
+  for (const [a, b] of extraSegments) {
+    for (const pt of [a, b]) {
+      const d = dist(p, pt);
+      if (d <= threshold && (!bestEndpoint || d < bestEndpoint.distance)) {
+        bestEndpoint = { point: { ...pt }, distance: d };
+      }
+    }
+  }
+  if (bestEndpoint) {
+    return { point: bestEndpoint.point, snapped: true, kind: 'wall-endpoint' };
+  }
+  let bestSegment: { point: Point; distance: number } | null = null;
+  const segments: [Point, Point][] = [
+    ...walls.flatMap((wall) => wallSegments(wall)),
+    ...extraSegments,
+  ];
+  for (const [a, b] of segments) {
+    const hit = closestPointOnSegment(p, a, b);
+    if (hit.distance <= threshold && (!bestSegment || hit.distance < bestSegment.distance)) {
+      bestSegment = { point: hit.point, distance: hit.distance };
+    }
+  }
+  if (bestSegment) {
+    return { point: bestSegment.point, snapped: true, kind: 'wall-segment' };
+  }
+  return none;
+}
+
+/**
+ * Adjusts a wall translation (dx, dy) so the moving wall's points land on other walls'
+ * endpoints or segments — the smallest such adjustment within `threshold`, if any.
+ */
+export function snapWallTranslation(
+  points: readonly Point[],
+  others: readonly Wall[],
+  dx: number,
+  dy: number,
+  threshold: number,
+  enabled: boolean,
+): { dx: number; dy: number; snapped: boolean } {
+  const none = { dx, dy, snapped: false };
+  if (!enabled || threshold <= 0 || points.length === 0 || others.length === 0) return none;
+  let bestDx = dx;
+  let bestDy = dy;
+  let bestDistance = threshold;
+  let found = false;
+  const consider = (adjX: number, adjY: number) => {
+    const distance = Math.hypot(adjX - dx, adjY - dy);
+    if (distance <= bestDistance) {
+      bestDx = adjX;
+      bestDy = adjY;
+      bestDistance = distance;
+      found = true;
+    }
+  };
+  for (const pt of points) {
+    const moved = { x: pt.x + dx, y: pt.y + dy };
+    for (const wall of others) {
+      for (const target of wall.points) {
+        consider(target.x - pt.x, target.y - pt.y);
+      }
+      for (const [a, b] of wallSegments(wall)) {
+        const hit = closestPointOnSegment(moved, a, b);
+        consider(dx + (hit.point.x - moved.x), dy + (hit.point.y - moved.y));
+      }
+    }
+  }
+  return found ? { dx: bestDx, dy: bestDy, snapped: true } : none;
+}
+
 export function pointInRect(p: Point, x: number, y: number, width: number, depth: number): boolean {
   return p.x >= x && p.x <= x + width && p.y >= y && p.y <= y + depth;
 }
@@ -387,14 +485,26 @@ export function hitTest(
     const rad = ((o.rotation ?? 0) * Math.PI) / 180;
     const dx = (Math.cos(rad) * o.width) / 2,
       dy = (Math.sin(rad) * o.width) / 2;
-    if (
-      closestPointOnSegment(
-        p,
-        { x: o.center.x - dx, y: o.center.y - dy },
-        { x: o.center.x + dx, y: o.center.y + dy },
-      ).distance <= Math.max(0.12, measureExtra)
-    )
+    const hinge = { x: o.center.x - dx, y: o.center.y - dy };
+    const spanEnd = { x: o.center.x + dx, y: o.center.y + dy };
+    const tolerance = Math.max(0.12, measureExtra);
+    if (closestPointOnSegment(p, hinge, spanEnd).distance <= tolerance)
       return { type: 'opening', id: o.id };
+    if (o.kind === 'door') {
+      // The leaf (hinge to swung-open end) and its swing arc are part of the door too.
+      const leafLocal = {
+        x: (o.flipH ? 1 : -1) * (o.width / 2),
+        y: (o.flipV ? 1 : -1) * o.width,
+      };
+      const leafEnd = {
+        x: o.center.x + leafLocal.x * Math.cos(rad) - leafLocal.y * Math.sin(rad),
+        y: o.center.y + leafLocal.x * Math.sin(rad) + leafLocal.y * Math.cos(rad),
+      };
+      // Mirror the hinge when flipH puts the leaf on the other end of the span.
+      const leafHinge = o.flipH ? spanEnd : hinge;
+      if (closestPointOnSegment(p, leafHinge, leafEnd).distance <= tolerance)
+        return { type: 'opening', id: o.id };
+    }
   }
   for (let k = (plan.walls ?? []).length - 1; k >= 0; k -= 1) {
     const wall = plan.walls[k];

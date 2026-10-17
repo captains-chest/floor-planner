@@ -15,6 +15,7 @@ import {
   fillPaint,
   measurementColor,
   PlacedObject,
+  wallPaint,
   Point,
   SNAP_PIXELS,
   ShapeKind,
@@ -38,6 +39,8 @@ import {
   snapAngle,
   snapObjectMove,
   snapToGeometry,
+  snapWallPoint,
+  snapWallTranslation,
   snapToRightAngle,
 } from '../../core/geometry';
 import { drawnHelperStep, MAJOR_HELPER_MULTIPLE } from '../../core/helper-grid';
@@ -276,26 +279,25 @@ type DragState =
         }
 
         @for (seg of wallsView(); track $index) {
-          <line
-            [attr.x1]="seg.a.x"
-            [attr.y1]="seg.a.y"
-            [attr.x2]="seg.b.x"
-            [attr.y2]="seg.b.y"
-            stroke="#d7dde8"
+          <polyline
+            [attr.points]="seg.points"
+            fill="none"
+            [attr.stroke]="seg.stroke"
+            [attr.stroke-opacity]="seg.opacity"
             [attr.stroke-width]="seg.thickness"
-            stroke-linecap="round"
+            stroke-linecap="square"
+            stroke-linejoin="miter"
           />
           @if (seg.selected) {
-            <line
-              [attr.x1]="seg.a.x"
-              [attr.y1]="seg.a.y"
-              [attr.x2]="seg.b.x"
-              [attr.y2]="seg.b.y"
+            <polyline
+              [attr.points]="seg.points"
+              fill="none"
               stroke="var(--accent)"
               stroke-width="2"
               stroke-dasharray="6 4"
               vector-effect="non-scaling-stroke"
-              stroke-linecap="round"
+              stroke-linecap="square"
+              stroke-linejoin="miter"
             />
           }
         }
@@ -411,8 +413,8 @@ type DragState =
             fill="none"
             stroke="var(--accent)"
             [attr.stroke-width]="wallThickness()"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+            stroke-linecap="square"
+            stroke-linejoin="miter"
             opacity="0.75"
           />
         }
@@ -868,19 +870,46 @@ export class Canvas {
     };
   });
 
-  protected readonly wallsView = computed(() =>
-    (this.store.plan().walls ?? []).flatMap((w) =>
-      wallRenderSegments(w, this.store.plan().openings ?? []).map(([a, b]) => ({
+  protected readonly wallsView = computed(() => {
+    const plan = this.store.plan();
+    const hover = this.hoverPick();
+    const selectedIds = new Set(this.store.selectedWalls().map((w) => w.id));
+    if (hover) {
+      for (const id of hover.wallIds) selectedIds.add(id);
+    }
+    return (plan.walls ?? []).flatMap((w) => {
+      const paint = wallPaint(w);
+      // Group consecutive render segments into polylines so joins render as one corner.
+      const chains: Point[][] = [];
+      for (const [a, b] of wallRenderSegments(w, plan.openings ?? [])) {
+        const last = chains[chains.length - 1];
+        if (
+          last &&
+          Math.abs(last[last.length - 1].x - a.x) < 1e-9 &&
+          Math.abs(last[last.length - 1].y - a.y) < 1e-9
+        ) {
+          last.push(b);
+        } else {
+          chains.push([a, b]);
+        }
+      }
+      return chains.map((pts) => ({
         id: w.id,
-        a,
-        b,
+        points: pts.map((pt) => `${pt.x},${pt.y}`).join(' '),
         thickness: w.thickness,
-        selected: this.store.selectedWall()?.id === w.id,
-      })),
-    ),
-  );
-  protected readonly openingsView = computed(() =>
-    (this.store.plan().openings ?? []).map((o) => {
+        stroke: paint.stroke,
+        opacity: paint.opacity,
+        selected: selectedIds.has(w.id),
+      }));
+    });
+  });
+  protected readonly openingsView = computed(() => {
+    const hover = this.hoverPick();
+    const selectedIds = new Set(this.store.selectedOpenings().map((o) => o.id));
+    if (hover) {
+      for (const id of hover.openingIds) selectedIds.add(id);
+    }
+    return (this.store.plan().openings ?? []).map((o) => {
       const [a, b] = openingEndpoints(o);
       const half = o.width / 2;
       return {
@@ -890,10 +919,10 @@ export class Canvas {
         half,
         transform: `rotate(${o.rotation ?? 0} ${o.center.x} ${o.center.y})`,
         doorLeafEnd: { x: o.center.x - half, y: o.center.y - o.width },
-        selected: this.store.selectedOpening()?.id === o.id,
+        selected: selectedIds.has(o.id),
       };
-    }),
-  );
+    });
+  });
   protected readonly openingPreview = computed(() => {
     const tool = this.store.tool();
     if (tool !== 'door' && tool !== 'window') return null;
@@ -923,7 +952,8 @@ export class Canvas {
   protected readonly wallPreview = computed(() => {
     if (this.store.tool() !== 'wall' || this.wallDraft().length === 0) return null;
     const last = this.wallDraft()[this.wallDraft().length - 1];
-    const raw = this.snap().snapped ? this.snap().point : (this.cursor() ?? last);
+    const base = this.snap().snapped ? this.snap().point : (this.cursor() ?? last);
+    const raw = this.wallSnapPoint(base, this.shiftHeld());
     const end = this.constrainOrthoPoint(last, raw, this.altHeld());
     return [...this.wallDraft(), end].map((pt) => `${pt.x},${pt.y}`).join(' ');
   });
@@ -1326,14 +1356,19 @@ export class Canvas {
 
     if (tool === 'door' || tool === 'window') {
       const snap = this.placementSnap(world, tool, event.shiftKey || this.shiftHeld());
-      this.store.addOpening(tool, snap.center, { rotation: snap.rotation, wallId: snap.wallId });
+      this.store.addOpening(tool, snap.center, {
+        rotation: snap.rotation,
+        wallId: snap.wallId,
+        objectId: snap.objectId,
+      });
       return;
     }
     if (tool === 'wall') {
       const last = this.wallDraft()[this.wallDraft().length - 1];
+      const target = this.wallSnapPoint(snapped.point, event.shiftKey || this.shiftHeld());
       const pt = last
-        ? this.constrainOrthoPoint(last, snapped.point, event.altKey || this.altHeld())
-        : { ...snapped.point };
+        ? this.constrainOrthoPoint(last, target, event.altKey || this.altHeld())
+        : { ...target };
       if (!last || dist(last, pt) > 0.01) this.wallDraft.update((pts) => [...pts, pt]);
       this.store.setStatus(
         this.wallDraft().length < 2
@@ -1577,12 +1612,14 @@ export class Canvas {
           center: snap.center,
           rotation: snap.rotation,
           wallId: snap.wallId,
+          objectId: snap.objectId,
         });
       else
         this.store.updateOpening(drag.id, {
           center: raw,
           rotation: drag.origRotation,
           wallId: null,
+          objectId: null,
         });
       return;
     }
@@ -1594,7 +1631,17 @@ export class Canvas {
         this.store.beginEdit();
         this.drag.set({ ...drag, recorded: true });
       }
-      const { dx, dy } = this.orthoDelta(rawDx, rawDy, alt);
+      const rawDelta = this.orthoDelta(rawDx, rawDy, alt);
+      const others = (this.store.plan().walls ?? []).filter((w) => w.id !== drag.id);
+      const adjusted = snapWallTranslation(
+        drag.origPoints,
+        others,
+        rawDelta.dx,
+        rawDelta.dy,
+        SNAP_PIXELS / this.zoom(),
+        !(event.shiftKey || this.shiftHeld()),
+      );
+      const { dx, dy } = adjusted;
       this.store.updateWall(drag.id, {
         points: drag.origPoints.map((pt) => ({ x: pt.x + dx, y: pt.y + dy })),
       });
@@ -1680,7 +1727,13 @@ export class Canvas {
     point: Point,
     kind: string,
     shift: boolean,
-  ): { center: Point; rotation: number; wallId: string | null; target: string | null } {
+  ): {
+    center: Point;
+    rotation: number;
+    wallId: string | null;
+    objectId: string | null;
+    target: string | null;
+  } {
     const plan = this.store.plan();
     const zoom = plan.viewport.zoom;
     const snapped = snapOpening(point, plan.walls ?? [], plan.objects, SNAP_PIXELS / zoom, !shift);
@@ -1690,8 +1743,20 @@ export class Canvas {
           center: point,
           rotation: this.store.selectedOpening()?.rotation ?? 0,
           wallId: null,
+          objectId: null,
           target: null,
         };
+  }
+
+  /** Snaps a wall-drawing point to existing walls (endpoints first, then segments). */
+  protected wallSnapPoint(point: Point, shift: boolean): Point {
+    if (shift) return { ...point };
+    const plan = this.store.plan();
+    const draft = this.wallDraft();
+    const draftSegments: [Point, Point][] = [];
+    for (let i = 1; i < draft.length; i++) draftSegments.push([draft[i - 1], draft[i]]);
+    return snapWallPoint(point, plan.walls ?? [], SNAP_PIXELS / this.zoom(), true, draftSegments)
+      .point;
   }
   protected rotateTransform(obj: PlacedObject): string {
     const rotation = obj.rotation ?? 0;

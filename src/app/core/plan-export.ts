@@ -5,6 +5,7 @@ import {
   Opening,
   PlacedObject,
   Wall,
+  wallPaint,
 } from '../models/floor-plan';
 import { wallRenderSegments } from './openings';
 import { contentBBox, dimensionView, type BoundingBox } from './geometry';
@@ -142,10 +143,26 @@ export function exportFilename(planName: string, extension: string): string {
 }
 
 function wallSvg(wall: Wall, openings: Opening[]): string {
-  return wallRenderSegments(wall, openings)
+  const paint = wallPaint(wall);
+  if (paint.stroke === 'none') return '';
+  // Consecutive segments become one polyline so corners join square, with no rounding.
+  const chains: { x: number; y: number }[][] = [];
+  for (const [a, b] of wallRenderSegments(wall, openings)) {
+    const last = chains[chains.length - 1];
+    if (
+      last &&
+      Math.abs(last[last.length - 1].x - a.x) < 1e-9 &&
+      Math.abs(last[last.length - 1].y - a.y) < 1e-9
+    ) {
+      last.push(b);
+    } else {
+      chains.push([a, b]);
+    }
+  }
+  return chains
     .map(
-      ([a, b]) =>
-        `<line x1="${n(a.x)}" y1="${n(a.y)}" x2="${n(b.x)}" y2="${n(b.y)}" stroke="${INK}" stroke-width="${n(wall.thickness)}" stroke-linecap="round"/>`,
+      (pts) =>
+        `<polyline points="${pts.map((pt) => `${n(pt.x)},${n(pt.y)}`).join(' ')}" fill="none" stroke="${paint.stroke}" stroke-opacity="${n(paint.opacity)}" stroke-width="${n(wall.thickness)}" stroke-linecap="square" stroke-linejoin="miter"/>`,
     )
     .join('');
 }

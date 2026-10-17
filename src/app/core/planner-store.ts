@@ -35,7 +35,9 @@ import {
   selectedMeasurements as measurementsOf,
   selectedObject as objectOf,
   selectedOpening as openingOf,
+  selectedOpenings as openingsOf,
   selectedWall as wallOf,
+  selectedWalls as wallsOf,
   selectedPlacedObjects,
   selectFromHit as applySelectFromHit,
   selectionCount as countSelection,
@@ -97,6 +99,8 @@ export class PlannerStore {
   readonly selectedObject = computed(() => objectOf(this.#plan(), this.#selection()));
   readonly selectedMeasurement = computed(() => measurementOf(this.#plan(), this.#selection()));
   readonly selectedWall = computed(() => wallOf(this.#plan(), this.#selection()));
+  readonly selectedWalls = computed(() => wallsOf(this.#plan(), this.#selection()));
+  readonly selectedOpenings = computed(() => openingsOf(this.#plan(), this.#selection()));
   readonly selectedOpening = computed(() => openingOf(this.#plan(), this.#selection()));
   readonly selectedObjects = computed(() => selectedPlacedObjects(this.#plan(), this.#selection()));
   readonly selectedGroup = computed(() => groupOf(this.#plan(), this.#selection()));
@@ -342,6 +346,7 @@ export class PlannerStore {
         width: door.width,
         rotation: door.rotation,
         wallId: null,
+        objectId: placed.object.id,
         flipV: true,
       });
       this.#edit.endEdit();
@@ -431,7 +436,7 @@ export class PlannerStore {
     }
     return null;
   }
-  updateWall(id: string, patch: Partial<Pick<Wall, 'points' | 'thickness'>>): void {
+  updateWall(id: string, patch: Partial<Pick<Wall, 'points' | 'thickness' | 'color'>>): void {
     this.#edit.updateWall(id, patch);
     this.#sync();
   }
@@ -443,6 +448,7 @@ export class PlannerStore {
       width?: number;
       rotation?: number;
       wallId?: string | null;
+      objectId?: string | null;
       flipH?: boolean;
       flipV?: boolean;
     } = {},

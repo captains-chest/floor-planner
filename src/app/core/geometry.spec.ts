@@ -6,6 +6,8 @@ import {
   measurementLine,
   offsetSegment,
   signedPerpendicularOffset,
+  snapWallPoint,
+  snapWallTranslation,
   unitPerpendicular,
 } from './geometry';
 
@@ -133,5 +135,99 @@ describe('hitTest measurements', () => {
       end: 'start',
     });
     expect(hitTest(plan, { x: 0, y: 0 }, 40, handles)).toBeNull();
+  });
+});
+
+describe('wall snapping', () => {
+  const walls = [
+    {
+      id: 'w1',
+      points: [
+        { x: 0, y: 0 },
+        { x: 4, y: 0 },
+        { x: 4, y: 3 },
+      ],
+      thickness: 0.15,
+    },
+  ];
+  it('snaps to the nearest wall endpoint first', () => {
+    const snap = snapWallPoint({ x: 4.08, y: 0.06 }, walls, 0.2, true);
+    expect(snap.snapped).toBe(true);
+    expect(snap.kind).toBe('wall-endpoint');
+    expect(snap.point).toEqual({ x: 4, y: 0 });
+  });
+  it('snaps onto a wall segment when no endpoint is near', () => {
+    const snap = snapWallPoint({ x: 2, y: 0.12 }, walls, 0.2, true);
+    expect(snap.kind).toBe('wall-segment');
+    expect(snap.point).toEqual({ x: 2, y: 0 });
+  });
+  it('does not snap when disabled (Shift) or beyond tolerance', () => {
+    expect(snapWallPoint({ x: 4.05, y: 0 }, walls, 0.2, false).snapped).toBe(false);
+    expect(snapWallPoint({ x: 2, y: 1 }, walls, 0.2, true).snapped).toBe(false);
+  });
+  it('adjusts a wall move so its endpoints meet another wall', () => {
+    const moving = [
+      { x: 6, y: 0.1 },
+      { x: 8, y: 0.1 },
+    ];
+    const adjusted = snapWallTranslation(moving, walls, -1.95, 0, 0.2, true);
+    expect(adjusted.snapped).toBe(true);
+    // Lands exactly on the other wall's vertical segment (x = 4).
+    expect(moving[0].x + adjusted.dx).toBeCloseTo(4);
+    expect(moving[0].y + adjusted.dy).toBeCloseTo(0.1);
+    expect(snapWallTranslation(moving, walls, -1.95, 0, 0.2, false).snapped).toBe(false);
+  });
+});
+
+describe('hitTest walls and openings', () => {
+  const plan = {
+    ...createDefaultPlan(),
+    walls: [
+      {
+        id: 'w1',
+        points: [
+          { x: 0, y: 0 },
+          { x: 5, y: 0 },
+        ],
+        thickness: 0.15,
+      },
+    ],
+    openings: [
+      {
+        id: 'win1',
+        kind: 'window' as const,
+        center: { x: 3.5, y: 0 },
+        width: 1.2,
+        rotation: 0,
+        wallId: 'w1',
+      },
+      {
+        id: 'door1',
+        kind: 'door' as const,
+        center: { x: 1, y: 0 },
+        width: 0.9,
+        rotation: 0,
+        wallId: 'w1',
+      },
+    ],
+  };
+  const handles = { objects: [], measurementId: null };
+  it('selects a wall by clicking its segment', () => {
+    expect(hitTest(plan, { x: 2.2, y: 0 }, 100, handles)).toEqual({ type: 'wall', id: 'w1' });
+    expect(hitTest(plan, { x: 2.2, y: 0.5 }, 100, handles)).toBeNull();
+  });
+  it('selects a window by clicking it, ahead of the wall behind it', () => {
+    expect(hitTest(plan, { x: 3.5, y: 0 }, 100, handles)).toEqual({
+      type: 'opening',
+      id: 'win1',
+    });
+  });
+  it('selects a door by its span and by its swung leaf', () => {
+    expect(hitTest(plan, { x: 1, y: 0 }, 100, handles)).toEqual({ type: 'opening', id: 'door1' });
+    // Leaf hangs from the left hinge (0.55, 0) toward -y for an unflipped door.
+    expect(hitTest(plan, { x: 0.55, y: -0.5 }, 100, handles)).toEqual({
+      type: 'opening',
+      id: 'door1',
+    });
   });
 });

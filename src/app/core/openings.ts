@@ -12,6 +12,7 @@ export interface OpeningSnap {
   center: Point;
   rotation: number;
   wallId: string | null;
+  objectId: string | null;
   target: 'wall' | 'object' | null;
 }
 
@@ -35,7 +36,13 @@ export function snapOpening(
   threshold: number,
   enabled: boolean,
 ): OpeningSnap {
-  const free: OpeningSnap = { center: { ...center }, rotation: 0, wallId: null, target: null };
+  const free: OpeningSnap = {
+    center: { ...center },
+    rotation: 0,
+    wallId: null,
+    objectId: null,
+    target: null,
+  };
   if (!enabled || threshold <= 0) return { ...free, center: { ...center } };
   let best: (OpeningSnap & { distance: number }) | null = null;
   for (const wall of walls ?? [])
@@ -46,6 +53,7 @@ export function snapOpening(
           center: hit.point,
           rotation: angleDeg(a, b),
           wallId: wall.id,
+          objectId: null,
           target: 'wall',
           distance: hit.distance,
         };
@@ -62,13 +70,20 @@ export function snapOpening(
           center: hit.point,
           rotation: angleDeg(a, b),
           wallId: null,
+          objectId: obj.id,
           target: 'object',
           distance: d,
         };
     }
   }
   return best
-    ? { center: best.center, rotation: best.rotation, wallId: best.wallId, target: best.target }
+    ? {
+        center: best.center,
+        rotation: best.rotation,
+        wallId: best.wallId,
+        objectId: best.objectId,
+        target: best.target,
+      }
     : free;
 }
 
@@ -106,3 +121,96 @@ const pointAlong = (a: Point, b: Point, t: number): Point => ({
   y: a.y + (b.y - a.y) * t,
 });
 export { rotateAround };
+
+/** Host segments an opening can be attached to, in order (wall polyline or object edges). */
+export function objectEdgeSegments(obj: PlacedObject): [Point, Point][] {
+  const corners = objectCorners(obj);
+  return corners.map((corner, i) => [corner, corners[(i + 1) % corners.length]] as [Point, Point]);
+}
+
+interface AttachmentAnchor {
+  segmentIndex: number;
+  t: number;
+  /** Signed distance from the segment to the opening centre, along the segment normal. */
+  perpendicular: number;
+  segmentAngle: number;
+}
+
+function anchorOn(opening: Opening, segments: readonly [Point, Point][]): AttachmentAnchor | null {
+  let best: (AttachmentAnchor & { distance: number }) | null = null;
+  segments.forEach(([a, b], index) => {
+    const hit = closestPointOnSegment(opening.center, a, b);
+    if (!best || hit.distance < best.distance) {
+      const len = dist(a, b) || 1;
+      const nx = -(b.y - a.y) / len;
+      const ny = (b.x - a.x) / len;
+      const perpendicular =
+        (opening.center.x - hit.point.x) * nx + (opening.center.y - hit.point.y) * ny;
+      best = {
+        segmentIndex: index,
+        t: hit.t,
+        perpendicular,
+        segmentAngle: angleDeg(a, b),
+        distance: hit.distance,
+      };
+    }
+  });
+  return best;
+}
+
+function applyAnchor(
+  opening: Opening,
+  anchor: AttachmentAnchor,
+  segments: readonly [Point, Point][],
+): { center: Point; rotation: number } | null {
+  const segment = segments[anchor.segmentIndex] ?? segments[segments.length - 1];
+  if (!segment) return null;
+  const [a, b] = segment;
+  const len = dist(a, b) || 1;
+  const nx = -(b.y - a.y) / len;
+  const ny = (b.x - a.x) / len;
+  const rotationDelta = angleDeg(a, b) - anchor.segmentAngle;
+  return {
+    center: {
+      x: a.x + (b.x - a.x) * anchor.t + nx * anchor.perpendicular,
+      y: a.y + (b.y - a.y) * anchor.t + ny * anchor.perpendicular,
+    },
+    rotation: (opening.rotation ?? 0) + rotationDelta,
+  };
+}
+
+/**
+ * Where every attached opening should sit after its host (wall or object) changed geometry,
+ * keeping each opening's position along its host segment (and its perpendicular offset).
+ * `hostsBefore`/`hostsAfter` map a host key ("wall:<id>" / "object:<id>") to its segments
+ * before and after the change. Openings whose host is absent from both maps are left alone.
+ */
+export function followAttachedOpenings(
+  openings: readonly Opening[],
+  hostsBefore: ReadonlyMap<string, [Point, Point][]>,
+  hostsAfter: ReadonlyMap<string, [Point, Point][]>,
+): Opening[] {
+  return openings.map((opening) => {
+    const key = opening.wallId
+      ? `wall:${opening.wallId}`
+      : opening.objectId
+        ? `object:${opening.objectId}`
+        : null;
+    if (!key) return opening;
+    const before = hostsBefore.get(key);
+    const after = hostsAfter.get(key);
+    if (!before || !after) return opening;
+    const anchor = anchorOn(opening, before);
+    if (!anchor) return opening;
+    const moved = applyAnchor(opening, anchor, after);
+    if (!moved) return opening;
+    if (
+      Math.abs(moved.center.x - opening.center.x) < 1e-9 &&
+      Math.abs(moved.center.y - opening.center.y) < 1e-9 &&
+      Math.abs(moved.rotation - (opening.rotation ?? 0)) < 1e-9
+    ) {
+      return opening;
+    }
+    return { ...opening, center: moved.center, rotation: moved.rotation };
+  });
+}
