@@ -97,6 +97,22 @@ import { StackOrder } from './stack-order/stack-order';
       width: auto;
     }
 
+    .transparent {
+      flex: none;
+      width: 2.25rem;
+      height: 2.25rem;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      background: repeating-conic-gradient(#c9d1d9 0% 25%, #ffffff 0% 50%) 0 0 / 12px 12px;
+    }
+
+    .transparent[aria-pressed='true'] {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+
     .row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -222,8 +238,16 @@ import { StackOrder } from './stack-order/stack-order';
             (focus)="store.beginEdit()"
             (input)="setObjectColor(obj.id, $event)"
             (change)="store.endEdit()"
+            (blur)="store.endEdit()"
           />
-          @if (obj.color) {
+          <button
+            type="button"
+            class="transparent"
+            aria-label="Transparent fill color"
+            [attr.aria-pressed]="obj.color === 'transparent'"
+            (click)="setFillTransparent(obj.id)"
+          ></button>
+          @if (obj.color && obj.color !== 'transparent') {
             <button
               type="button"
               class="action"
@@ -234,23 +258,23 @@ import { StackOrder } from './stack-order/stack-order';
           }
         </div>
         <div class="color-row">
-          <label for="object-border-toggle">Border</label>
-          <input
-            id="object-border-toggle"
-            type="checkbox"
-            [checked]="!!obj.borderColor"
-            (change)="setObjectBorder(obj, $event)"
-          />
           <label for="object-border-color">Border color</label>
           <input
             id="object-border-color"
             type="color"
             [value]="objectBorderColor(obj)"
-            [disabled]="!obj.borderColor"
             (focus)="store.beginEdit()"
             (input)="setObjectBorderColor(obj.id, $event)"
             (change)="store.endEdit()"
+            (blur)="store.endEdit()"
           />
+          <button
+            type="button"
+            class="transparent"
+            aria-label="Transparent border color (no border)"
+            [attr.aria-pressed]="!obj.borderColor"
+            (click)="setBorderTransparent(obj.id)"
+          ></button>
         </div>
         <button type="button" class="action" (click)="store.copySelection()">Copy object</button>
         <app-stack-order />
@@ -302,9 +326,13 @@ export class Inspector {
   protected readonly objectBorderColor = objectBorderColor;
   protected readonly measurementColor = measurementColor;
 
-  protected setObjectBorder(obj: { id: string; borderColor?: string }, event: Event): void {
-    const checked = (event.target as HTMLInputElement).checked;
-    this.store.updateObject(obj.id, { borderColor: checked ? objectBorderColor(obj) : undefined });
+  protected setFillTransparent(id: string): void {
+    this.store.updateObject(id, { color: 'transparent' });
+    this.store.endEdit();
+  }
+  protected setBorderTransparent(id: string): void {
+    this.store.updateObject(id, { borderColor: undefined });
+    this.store.endEdit();
   }
   protected setObjectBorderColor(id: string, event: Event): void {
     const color = normalizeColor(this.inputValue(event));

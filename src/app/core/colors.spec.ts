@@ -6,6 +6,7 @@ import {
   OBJECT_BORDER_COLOR,
   OBJECT_COLORS,
   objectBorderColor,
+  objectFill,
   objectColor,
 } from '../models/floor-plan';
 import { parseProjectDocument, PROJECT_KIND } from './persistence';
@@ -25,7 +26,40 @@ describe('colors', () => {
     expect(measurementColor({})).toBe(MEASUREMENT_COLOR);
     expect(measurementColor({ color: '#654321' })).toBe('#654321');
     expect(objectBorderColor({})).toBe(OBJECT_BORDER_COLOR);
+    expect(objectFill({ kind: 'rect' })).toBe(OBJECT_COLORS.rect);
+    expect(objectFill({ kind: 'rect', color: 'transparent' })).toBe('transparent');
     expect(objectBorderColor({ borderColor: '#123123' })).toBe('#123123');
+  });
+
+  it('round-trips transparent fill, drops transparent/invalid borders, older saves unchanged', () => {
+    const parsed = parseProjectDocument({
+      kind: PROJECT_KIND,
+      formatVersion: 1,
+      plan: {
+        version: 1,
+        name: 'T',
+        objects: [
+          {
+            id: 'a',
+            kind: 'rect',
+            name: 'A',
+            x: 0,
+            y: 0,
+            width: 1,
+            depth: 1,
+            rotation: 0,
+            groupId: null,
+            color: 'transparent',
+            borderColor: 'transparent',
+          },
+        ],
+        measurements: [],
+        groups: [],
+        viewport: { panX: 0, panY: 0, zoom: 40 },
+      },
+    });
+    expect(parsed!.plan.objects[0].color).toBe('transparent');
+    expect('borderColor' in parsed!.plan.objects[0]).toBe(false);
   });
 
   it('keeps a saved border color, drops invalid ones, and older saves have no border', () => {

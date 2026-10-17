@@ -238,7 +238,7 @@ function normalizeObject(raw: unknown): PlacedObject | null {
     depth: Math.max(0.01, num(value.depth, 0.8)),
     rotation: num(value.rotation, 0),
     groupId: typeof value.groupId === 'string' ? value.groupId : null,
-    ...(color ? { color } : {}),
+    ...(value.color === 'transparent' ? { color: 'transparent' } : color ? { color } : {}),
     ...(normalizeColor(value.borderColor)
       ? { borderColor: normalizeColor(value.borderColor) }
       : {}),

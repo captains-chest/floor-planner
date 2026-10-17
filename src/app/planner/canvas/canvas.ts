@@ -11,7 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import {
-  objectColor,
+  objectFill,
   measurementColor,
   PlacedObject,
   Point,
@@ -273,9 +273,9 @@ type DragState =
                 [attr.height]="item.obj.depth"
                 [attr.fill]="item.fill"
                 fill-opacity="0.82"
-                [attr.stroke]="item.border ?? '#0d1117'"
-                [attr.stroke-opacity]="item.border ? 1 : 0.35"
-                [attr.stroke-width]="item.border ? 3 : 1"
+                [attr.stroke]="item.border ?? 'none'"
+                [attr.stroke-opacity]="item.border ? 1 : 0"
+                [attr.stroke-width]="item.border ? 3 : 0"
                 vector-effect="non-scaling-stroke"
               />
             } @else {
@@ -286,9 +286,9 @@ type DragState =
                 [attr.ry]="item.obj.depth / 2"
                 [attr.fill]="item.fill"
                 fill-opacity="0.82"
-                [attr.stroke]="item.border ?? '#0d1117'"
-                [attr.stroke-opacity]="item.border ? 1 : 0.35"
-                [attr.stroke-width]="item.border ? 3 : 1"
+                [attr.stroke]="item.border ?? 'none'"
+                [attr.stroke-opacity]="item.border ? 1 : 0"
+                [attr.stroke-width]="item.border ? 3 : 0"
                 vector-effect="non-scaling-stroke"
               />
             }
@@ -716,7 +716,7 @@ export class Canvas {
   protected readonly drawList = computed(() =>
     this.store.plan().objects.map((obj) => ({
       obj,
-      fill: objectColor(obj),
+      fill: objectFill(obj) === 'transparent' ? 'none' : objectFill(obj),
       border: obj.borderColor ?? null,
     })),
   );

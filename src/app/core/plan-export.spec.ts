@@ -68,7 +68,17 @@ describe('renderPlanSvg', () => {
     expect(svg).toContain('stroke="#ff00aa"');
     const plain = renderPlanSvg({ plan: base, imageDataUrl: null, lengthUnit: 'm' }).svg;
     expect(plain).not.toContain('stroke="#ff00aa"');
-    expect(plain).toContain('stroke-opacity="0.6"');
+    expect(plain).toContain('stroke="none"');
+  });
+
+  it('exports transparent fill as no fill and no border stroke by default', () => {
+    const base = plan();
+    const clear = plan({
+      objects: [{ ...base.objects[0], color: 'transparent' }, base.objects[1]],
+    });
+    const svg = renderPlanSvg({ plan: clear, imageDataUrl: null, lengthUnit: 'm' }).svg;
+    expect(svg).toContain('fill="none"');
+    expect(svg).toContain('stroke="none"');
   });
 
   it('escapes the plan name in the title and header', () => {
