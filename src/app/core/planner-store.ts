@@ -13,7 +13,13 @@ import {
   Viewport,
 } from '../models/floor-plan';
 import { type Hit } from './geometry';
-import { furnitureById, furnitureObjectName, placementSpot } from './furniture';
+import {
+  CUPBOARD_DOOR_ID,
+  cupboardDoorPlacement,
+  furnitureById,
+  furnitureObjectName,
+  placementSpot,
+} from './furniture';
 import { renderPlanSvg, type RenderedPlan } from './plan-export';
 import { measureImage, readFileAsDataUrl } from './image';
 import { parseProjectDocument, Persistence, serializeProject } from './persistence';
@@ -328,6 +334,15 @@ export class PlannerStore {
     const name = furnitureObjectName(item, this.#plan());
     const spot = placementSpot(item, { x: centerX, y: centerY }, this.#plan());
     const result = this.#edit.addObject(item.kind, spot.x, spot.y, item.width, item.depth, name);
+    if (item.id === CUPBOARD_DOOR_ID) {
+      const door = cupboardDoorPlacement(result.object);
+      this.#edit.addOpening('door', door.center, {
+        width: door.width,
+        rotation: door.rotation,
+        wallId: null,
+        flipV: true,
+      });
+    }
     this.#sync();
     this.#selection.set({ type: 'object', id: result.object.id });
     this.setTool('select');
@@ -415,7 +430,13 @@ export class PlannerStore {
   addOpening(
     kind: OpeningKind,
     center: Point,
-    opts: { width?: number; rotation?: number; wallId?: string | null } = {},
+    opts: {
+      width?: number;
+      rotation?: number;
+      wallId?: string | null;
+      flipH?: boolean;
+      flipV?: boolean;
+    } = {},
   ): Opening {
     const result = this.#edit.addOpening(kind, center, opts);
     this.#sync();

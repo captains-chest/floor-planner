@@ -3,6 +3,9 @@ import { createDefaultPlan, FloorPlan, PlacedObject } from '../models/floor-plan
 import {
   FURNITURE,
   FURNITURE_CATEGORIES,
+  CUPBOARD_DOOR_ID,
+  cupboardDoorPlacement,
+  filterFurniture,
   furnitureById,
   furnitureObjectName,
   placementSpot,
@@ -25,6 +28,19 @@ const planWith = (...names: string[]): FloorPlan => ({
 });
 
 describe('furniture library', () => {
+  it('finds pieces by name or category for catalog search', () => {
+    expect(filterFurniture('sofa').map((i) => i.id)).toContain('sofa-3');
+    expect(filterFurniture('bathroom').length).toBeGreaterThan(3);
+    expect(filterFurniture('  ')).toHaveLength(FURNITURE.length);
+    expect(filterFurniture('zzz')).toEqual([]);
+  });
+  it('places the cupboard door on the front edge of the cupboard', () => {
+    const item = furnitureById(CUPBOARD_DOOR_ID)!;
+    expect(item.name).toBe('Cupboard with door');
+    const door = cupboardDoorPlacement({ x: 1, y: 2, width: item.width, depth: item.depth });
+    expect(door.center).toEqual({ x: 1.5, y: 2.6 });
+    expect(door.width).toBeCloseTo(0.8);
+  });
   it('has unique ids, known categories and positive real-world sizes', () => {
     expect(new Set(FURNITURE.map((item) => item.id)).size).toBe(FURNITURE.length);
     for (const item of FURNITURE) {

@@ -305,7 +305,13 @@ export class PlanEdit {
   addOpening(
     kind: OpeningKind,
     center: Point,
-    opts: { width?: number; rotation?: number; wallId?: string | null } = {},
+    opts: {
+      width?: number;
+      rotation?: number;
+      wallId?: string | null;
+      flipH?: boolean;
+      flipV?: boolean;
+    } = {},
   ): { opening: Opening } {
     const opening: Opening = {
       id: createId(kind),
@@ -313,8 +319,8 @@ export class PlanEdit {
       center: { ...center },
       width: clampOpeningWidth(kind, opts.width),
       rotation: opts.rotation ?? 0,
-      flipH: false,
-      flipV: false,
+      flipH: Boolean(opts.flipH),
+      flipV: Boolean(opts.flipV),
       wallId: opts.wallId ?? null,
     };
     this.#record();

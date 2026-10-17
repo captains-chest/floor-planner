@@ -59,6 +59,14 @@ export const FURNITURE: readonly FurnitureItem[] = [
   },
   { id: 'wardrobe', name: 'Wardrobe', category: 'Bedroom', kind: 'rect', width: 1.0, depth: 0.6 },
   {
+    id: 'cupboard-door',
+    name: 'Cupboard with door',
+    category: 'Bedroom',
+    kind: 'rect',
+    width: 1.0,
+    depth: 0.6,
+  },
+  {
     id: 'nightstand',
     name: 'Nightstand',
     category: 'Bedroom',
@@ -132,6 +140,30 @@ export const FURNITURE_CATEGORIES: readonly FurnitureCategory[] = [
   'Bathroom',
   'Office',
 ];
+
+export const CUPBOARD_DOOR_ID = 'cupboard-door';
+
+/** Where the door goes for a cupboard-with-door: centred on the front (bottom) edge, swinging out. */
+export function cupboardDoorPlacement(obj: {
+  x: number;
+  y: number;
+  width: number;
+  depth: number;
+}): { center: { x: number; y: number }; width: number; rotation: number } {
+  return {
+    center: { x: obj.x + obj.width / 2, y: obj.y + obj.depth },
+    width: Math.min(0.8, obj.width * 0.8),
+    rotation: 0,
+  };
+}
+
+export function filterFurniture(query: string): readonly FurnitureItem[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return FURNITURE;
+  return FURNITURE.filter(
+    (item) => item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q),
+  );
+}
 
 export function furnitureById(id: string): FurnitureItem | undefined {
   return FURNITURE.find((item) => item.id === id);
