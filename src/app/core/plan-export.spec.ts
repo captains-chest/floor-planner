@@ -77,9 +77,9 @@ describe('renderPlanSvg', () => {
       imageDataUrl: null,
       lengthUnit: 'm',
     }).svg;
-    expect(svg).toContain('<polyline points="0,0 4,0 4,2"');
+    expect(svg).toContain('<line x1="0" y1="0" x2="4" y2="0"');
     expect(svg).toContain('stroke-width="0.24"');
-    expect(svg).toContain('stroke-linejoin="round"');
+    expect(svg).toContain('stroke-linecap="round"');
   });
   it('escapes the plan name in the title and header', () => {
     const { svg } = renderPlanSvg({ plan: plan(), imageDataUrl: null, lengthUnit: 'm' });

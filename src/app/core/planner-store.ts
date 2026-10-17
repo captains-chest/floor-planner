@@ -5,6 +5,8 @@ import {
   PlacedObject,
   Point,
   Selection,
+  Opening,
+  OpeningKind,
   ShapeKind,
   Tool,
   Wall,
@@ -26,6 +28,7 @@ import {
   selectedMeasurement as measurementOf,
   selectedMeasurements as measurementsOf,
   selectedObject as objectOf,
+  selectedOpening as openingOf,
   selectedWall as wallOf,
   selectedPlacedObjects,
   selectFromHit as applySelectFromHit,
@@ -88,6 +91,7 @@ export class PlannerStore {
   readonly selectedObject = computed(() => objectOf(this.#plan(), this.#selection()));
   readonly selectedMeasurement = computed(() => measurementOf(this.#plan(), this.#selection()));
   readonly selectedWall = computed(() => wallOf(this.#plan(), this.#selection()));
+  readonly selectedOpening = computed(() => openingOf(this.#plan(), this.#selection()));
   readonly selectedObjects = computed(() => selectedPlacedObjects(this.#plan(), this.#selection()));
   readonly selectedGroup = computed(() => groupOf(this.#plan(), this.#selection()));
   readonly selectedMeasurements = computed(() => measurementsOf(this.#plan(), this.#selection()));
@@ -95,7 +99,7 @@ export class PlannerStore {
 
   readonly canGroup = computed(() => this.selectedObjects().length >= 2);
   readonly canUngroup = computed(() => this.#selection()?.type === 'group');
-  readonly canCopy = computed(() => this.selectedObjects().length > 0);
+  readonly canCopy = computed(() => this.selectedObjects().length > 0 || !!this.selectedOpening());
   readonly canPaste = computed(() => {
     this.#historyTick();
     return this.#edit.canPaste;
@@ -408,6 +412,22 @@ export class PlannerStore {
     this.#sync();
   }
 
+  addOpening(
+    kind: OpeningKind,
+    center: Point,
+    opts: { width?: number; rotation?: number; wallId?: string | null } = {},
+  ): Opening {
+    const result = this.#edit.addOpening(kind, center, opts);
+    this.#sync();
+    this.#selection.set({ type: 'opening', id: result.opening.id });
+    this.setTool('select');
+    this.#status.set(kind === 'door' ? 'Door added.' : 'Window added.');
+    return result.opening;
+  }
+  updateOpening(id: string, patch: Partial<Opening>): void {
+    this.#edit.updateOpening(id, patch);
+    this.#sync();
+  }
   updateMeasurement(
     id: string,
     patch: Partial<Pick<Measurement, 'start' | 'end' | 'offset' | 'color'>>,
@@ -558,6 +578,10 @@ const toolHint = (tool: Tool): string => {
       return 'Click and drag to place a circle';
     case 'ellipse':
       return 'Click and drag to place an ellipse';
+    case 'door':
+      return 'Click to place a door · snaps to walls and object edges · Shift: no snap';
+    case 'window':
+      return 'Click to place a window · snaps to walls and object edges · Shift: no snap';
     case 'wall':
       return 'Click to add wall points · double-click or Enter to finish · Alt: 90° · Shift: snap off';
     default: {

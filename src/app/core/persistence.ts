@@ -5,7 +5,9 @@ import {
   Measurement,
   ObjectGroup,
   PlacedObject,
+  Opening,
   Point,
+  clampOpeningWidth,
   Wall,
   clampWallThickness,
   normalizeColor,
@@ -164,6 +166,9 @@ function normalizePlan(raw: unknown): FloorPlan {
     walls: Array.isArray(value.walls)
       ? value.walls.map(normalizeWall).filter((w): w is Wall => w !== null)
       : [],
+    openings: Array.isArray(value.openings)
+      ? value.openings.map(normalizeOpening).filter((o): o is Opening => o !== null)
+      : [],
     groups: Array.isArray(value.groups)
       ? value.groups.map(normalizeGroup).filter((item): item is ObjectGroup => item !== null)
       : [],
@@ -193,6 +198,25 @@ function normalizeBackground(raw: FloorPlan['background'] | undefined): FloorPla
   };
 }
 
+function normalizeOpening(raw: unknown): Opening | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Partial<Opening>;
+  if (typeof value.id !== 'string' || (value.kind !== 'door' && value.kind !== 'window'))
+    return null;
+  const center = normalizePoint(value.center);
+  if (!center) return null;
+  return {
+    id: value.id,
+    kind: value.kind,
+    center,
+    width: clampOpeningWidth(value.kind, value.width),
+    rotation:
+      typeof value.rotation === 'number' && Number.isFinite(value.rotation) ? value.rotation : 0,
+    flipH: Boolean(value.flipH),
+    flipV: Boolean(value.flipV),
+    wallId: typeof value.wallId === 'string' ? value.wallId : null,
+  };
+}
 function normalizeWall(raw: unknown): Wall | null {
   if (!raw || typeof raw !== 'object') return null;
   const value = raw as Partial<Wall>;

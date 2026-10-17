@@ -1,4 +1,5 @@
-import { FloorPlan, PlacedObject, Wall, objectColor } from '../models/floor-plan';
+import { FloorPlan, Opening, PlacedObject, Wall, objectColor } from '../models/floor-plan';
+import { wallRenderSegments } from './openings';
 import { contentBBox, dimensionView, type BoundingBox } from './geometry';
 import { formatLength, type LengthUnit } from './units';
 
@@ -62,7 +63,8 @@ export function renderPlanSvg(
       `<image href="${esc(imageDataUrl)}" x="0" y="0" width="${n(imageSize.width)}" height="${n(imageSize.height)}" preserveAspectRatio="none"/>`,
     );
   }
-  for (const wall of plan.walls ?? []) parts.push(wallSvg(wall));
+  for (const wall of plan.walls ?? []) parts.push(wallSvg(wall, plan.openings ?? []));
+  for (const opening of plan.openings ?? []) parts.push(openingSvg(opening, m(1)));
   for (const obj of plan.objects) {
     parts.push(objectSvg(obj, m(1), label));
   }
@@ -132,9 +134,25 @@ export function exportFilename(planName: string, extension: string): string {
   return `${slug || 'floor-plan'}.${extension}`;
 }
 
-function wallSvg(wall: Wall): string {
-  const pts = wall.points.map((pt) => `${n(pt.x)},${n(pt.y)}`).join(' ');
-  return `<polyline points="${pts}" fill="none" stroke="${INK}" stroke-width="${n(wall.thickness)}" stroke-linecap="round" stroke-linejoin="round"/>`;
+function wallSvg(wall: Wall, openings: Opening[]): string {
+  return wallRenderSegments(wall, openings)
+    .map(
+      ([a, b]) =>
+        `<line x1="${n(a.x)}" y1="${n(a.y)}" x2="${n(b.x)}" y2="${n(b.y)}" stroke="${INK}" stroke-width="${n(wall.thickness)}" stroke-linecap="round"/>`,
+    )
+    .join('');
+}
+function openingSvg(o: Opening, hairline: number): string {
+  const w = o.width,
+    h = w / 2,
+    sw = n(hairline * 1.5),
+    sx = o.flipH ? -1 : 1,
+    sy = o.flipV ? -1 : 1;
+  const inner =
+    o.kind === 'door'
+      ? `<line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" stroke="${INK}" stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(-h)}" y2="${n(-w)}" stroke="${INK}" stroke-width="${sw}"/><path d="M ${n(-h)} ${n(-w)} A ${n(w)} ${n(w)} 0 0 1 ${n(h)} 0" fill="none" stroke="${INK}" stroke-width="${sw}"/>`
+      : `<rect x="${n(-h)}" y="-0.075" width="${n(w)}" height="0.15" fill="#fff" stroke="${INK}" stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" stroke="${INK}" stroke-width="${sw}"/>`;
+  return `<g transform="translate(${n(o.center.x)} ${n(o.center.y)}) rotate(${n(o.rotation ?? 0)}) scale(${sx} ${sy})">${inner}</g>`;
 }
 function objectSvg(obj: PlacedObject, hairline: number, label: number): string {
   const cx = obj.x + obj.width / 2;

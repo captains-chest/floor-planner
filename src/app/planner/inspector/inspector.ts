@@ -247,6 +247,48 @@ import { StackOrder } from './stack-order/stack-order';
           Drag the wall to move it. Thickness is in real-world units from the plan scale.
         </p>
         <button class="danger" type="button" (click)="store.deleteSelection()">Delete wall</button>
+      } @else if (store.selectedOpening(); as opening) {
+        <p class="metric">
+          {{ opening.kind === 'door' ? 'Door' : 'Window' }} ·
+          {{ opening.wallId ? 'Snapped to a wall' : 'Free-standing' }}
+        </p>
+        <label
+          >Width ({{ store.lengthUnit() }})<input
+            type="number"
+            [min]="min()"
+            [step]="step()"
+            [value]="display(opening.width)"
+            (change)="setOpeningWidth(opening.id, $event)"
+        /></label>
+        <label
+          >Rotation (°)<input
+            type="number"
+            step="1"
+            [value]="round(opening.rotation ?? 0)"
+            (change)="setOpeningRotation(opening.id, $event)"
+        /></label>
+        @if (opening.kind === 'door') {
+          <button
+            type="button"
+            class="action"
+            (click)="store.updateOpening(opening.id, { flipH: !opening.flipH })"
+          >
+            Flip door horizontally
+          </button>
+          <button
+            type="button"
+            class="action"
+            (click)="store.updateOpening(opening.id, { flipV: !opening.flipV })"
+          >
+            Flip door vertically
+          </button>
+        }
+        <button type="button" class="action" (click)="store.copySelection()">
+          Copy {{ opening.kind }}
+        </button>
+        <button class="danger" type="button" (click)="store.deleteSelection()">
+          Delete {{ opening.kind }}
+        </button>
       } @else if (store.selectedMeasurement(); as measurement) {
         <p class="metric">Length: {{ format(dist(measurement.start, measurement.end)) }}</p>
         <p class="metric">
@@ -276,7 +318,8 @@ import { StackOrder } from './stack-order/stack-order';
         </button>
       } @else {
         <p class="empty">
-          Select an object, wall or measurement. Enter sizes in {{ store.lengthUnit() }}.
+          Select an object, wall, door, window or measurement. Enter sizes in
+          {{ store.lengthUnit() }}.
         </p>
       }
     </div>
@@ -290,6 +333,14 @@ export class Inspector {
   protected readonly measurementColor = measurementColor;
   protected readonly wallLength = wallLength;
 
+  protected setOpeningWidth(id: string, event: Event): void {
+    const v = this.lengthValue(event);
+    if (v > 0) this.store.updateOpening(id, { width: v });
+  }
+  protected setOpeningRotation(id: string, event: Event): void {
+    const v = this.numberValue(event);
+    if (Number.isFinite(v)) this.store.updateOpening(id, { rotation: v });
+  }
   protected setWallThickness(id: string, event: Event): void {
     const v = this.lengthValue(event);
     if (v > 0) this.store.updateWall(id, { thickness: v });

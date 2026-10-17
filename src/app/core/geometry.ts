@@ -215,6 +215,7 @@ export type Hit =
   | { type: 'measurement'; id: string }
   | { type: 'measurement-end'; id: string; end: 'start' | 'end' }
   | { type: 'wall'; id: string }
+  | { type: 'opening'; id: string }
   | { type: 'rotate-object'; id: string }
   | { type: 'rotate-objects'; ids: string[] };
 
@@ -381,6 +382,20 @@ export function hitTest(
     }
   }
 
+  for (let k = (plan.openings ?? []).length - 1; k >= 0; k -= 1) {
+    const o = plan.openings[k];
+    const rad = ((o.rotation ?? 0) * Math.PI) / 180;
+    const dx = (Math.cos(rad) * o.width) / 2,
+      dy = (Math.sin(rad) * o.width) / 2;
+    if (
+      closestPointOnSegment(
+        p,
+        { x: o.center.x - dx, y: o.center.y - dy },
+        { x: o.center.x + dx, y: o.center.y + dy },
+      ).distance <= Math.max(0.12, measureExtra)
+    )
+      return { type: 'opening', id: o.id };
+  }
   for (let k = (plan.walls ?? []).length - 1; k >= 0; k -= 1) {
     const wall = plan.walls[k];
     if (
@@ -450,6 +465,9 @@ export function contentBBox(
     for (const corner of objectCorners(obj)) {
       include(corner.x, corner.y);
     }
+  }
+  for (const o of plan.openings ?? []) {
+    include(o.center.x - o.width / 2, o.center.y - o.width / 2, o.width, o.width);
   }
   for (const wall of plan.walls ?? []) {
     for (const pt of wall.points)
