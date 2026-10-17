@@ -27,6 +27,7 @@ describe('tool guides', () => {
       rect: 'r',
       circle: 'c',
       ellipse: 'e',
+      wall: 'w',
     };
     for (const id of Object.keys(keys) as ToolbarTool[]) {
       expect(toolForShortcut(keys[id])).toBe(id);

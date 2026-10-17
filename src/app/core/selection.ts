@@ -5,6 +5,7 @@ import {
   PlacedObject,
   Point,
   Selection,
+  Wall,
 } from '../models/floor-plan';
 import {
   type BoundingBox,
@@ -81,8 +82,13 @@ export const selectedObject = (plan: FloorPlan, selected: Selection): PlacedObje
 export const selectedMeasurement = (plan: FloorPlan, selected: Selection): Measurement | null =>
   selectedMeasurements(plan, selected)[0] ?? null;
 
+export const selectedWall = (plan: FloorPlan, selected: Selection): Wall | null =>
+  selected?.type === 'wall' ? ((plan.walls ?? []).find((w) => w.id === selected.id) ?? null) : null;
+
 export const selectionCount = (plan: FloorPlan, selected: Selection): number =>
-  selectedPlacedObjects(plan, selected).length + selectedMeasurements(plan, selected).length;
+  selectedPlacedObjects(plan, selected).length +
+  selectedMeasurements(plan, selected).length +
+  (selectedWall(plan, selected) ? 1 : 0);
 
 export const isObjectSelected = (plan: FloorPlan, selected: Selection, id: string): boolean =>
   selectedPlacedObjects(plan, selected).some((obj) => obj.id === id);
@@ -158,6 +164,7 @@ export const pickFromSelection = (plan: FloorPlan, selection: Selection): BoxPic
   if (selection.type === 'measurement') {
     return { ...empty, measurementIds: [selection.id] };
   }
+  if (selection.type === 'wall') return empty;
   return {
     objectIds: [...selection.objectIds],
     measurementIds: [...selection.measurementIds],
@@ -257,6 +264,7 @@ export const selectFromHit = (
   if (hit.type === 'object') {
     return selectObject(plan, current, hit.id, additive);
   }
+  if (hit.type === 'wall') return { type: 'wall', id: hit.id };
   return { type: 'measurement', id: hit.id };
 };
 

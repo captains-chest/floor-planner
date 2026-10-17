@@ -12,6 +12,9 @@ import {
   Selection,
   ShapeKind,
   Viewport,
+  Wall,
+  clampWallThickness,
+  DEFAULT_WALL_THICKNESS,
 } from '../models/floor-plan';
 import { clamp, contentBBox, dist, scalePoint } from './geometry';
 import { selectionFromObjectIds, selectedPlacedObjects } from './selection';
@@ -435,6 +438,36 @@ export class PlanEdit {
     };
   }
 
+  addWall(points: Point[], thickness = DEFAULT_WALL_THICKNESS): { wall: Wall } | PlanEditResult {
+    const clean = points.filter((pt, i) => i === 0 || dist(pt, points[i - 1]) > 0.01);
+    if (clean.length < 2) return { notice: null };
+    const wall: Wall = {
+      id: createId('wall'),
+      points: clean.map((pt) => ({ ...pt })),
+      thickness: clampWallThickness(thickness),
+    };
+    this.#record();
+    this.#plan = { ...this.#plan, walls: [...(this.#plan.walls ?? []), wall] };
+    return { wall };
+  }
+
+  updateWall(id: string, patch: Partial<Pick<Wall, 'points' | 'thickness'>>): void {
+    this.#record();
+    this.#plan = {
+      ...this.#plan,
+      walls: (this.#plan.walls ?? []).map((w) =>
+        w.id === id
+          ? {
+              ...w,
+              ...patch,
+              thickness: clampWallThickness(patch.thickness ?? w.thickness),
+              points: patch.points ? patch.points.map((pt) => ({ ...pt })) : w.points,
+            }
+          : w,
+      ),
+    };
+  }
+
   deleteSelection(selection: Selection): PlanEditResult {
     if (!selection) {
       return { notice: null };
@@ -472,6 +505,11 @@ export class PlanEdit {
         start: scalePoint(item.start, factor),
         end: scalePoint(item.end, factor),
         offset: (item.offset ?? 0) * factor,
+      })),
+      walls: (this.#plan.walls ?? []).map((w) => ({
+        ...w,
+        points: w.points.map((pt) => scalePoint(pt, factor)),
+        thickness: w.thickness * factor,
       })),
       viewport: {
         panX: this.#plan.viewport.panX * factor,
@@ -625,10 +663,10 @@ const removeSelection = (plan: FloorPlan, selection: Selection): FloorPlan => {
     return removeObjects(plan, ids);
   }
   if (selection.type === 'measurement') {
-    return {
-      ...plan,
-      measurements: plan.measurements.filter((item) => item.id !== selection.id),
-    };
+    return { ...plan, measurements: plan.measurements.filter((item) => item.id !== selection.id) };
+  }
+  if (selection.type === 'wall') {
+    return { ...plan, walls: (plan.walls ?? []).filter((item) => item.id !== selection.id) };
   }
   if (selection.type === 'multi') {
     let next = removeObjects(plan, new Set(selection.objectIds));

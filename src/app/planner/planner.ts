@@ -304,6 +304,11 @@ export class Planner {
       return;
     }
 
+    if (event.key === 'Enter' && this.store.tool() === 'wall') {
+      event.preventDefault();
+      this.canvas()?.finishWallDraft();
+      return;
+    }
     if (event.key === 'Escape') {
       this.canvas()?.cancelDraft();
       this.store.cancelScale();

@@ -1,5 +1,5 @@
 import { Component, inject } from '@angular/core';
-import { dist } from '../../core/geometry';
+import { dist, wallLength } from '../../core/geometry';
 import { measurementColor, normalizeColor, objectColor } from '../../models/floor-plan';
 import { PlannerStore } from '../../core/planner-store';
 import {
@@ -231,6 +231,22 @@ import { StackOrder } from './stack-order/stack-order';
         <button class="danger" type="button" (click)="store.deleteSelection()">
           Delete object
         </button>
+      } @else if (store.selectedWall(); as wall) {
+        <p class="metric">
+          Wall · {{ format(wallLength(wall)) }} long · {{ wall.points.length - 1 }} segments
+        </p>
+        <label
+          >Thickness ({{ store.lengthUnit() }})<input
+            type="number"
+            [min]="min()"
+            [step]="step()"
+            [value]="display(wall.thickness)"
+            (change)="setWallThickness(wall.id, $event)"
+        /></label>
+        <p class="empty">
+          Drag the wall to move it. Thickness is in real-world units from the plan scale.
+        </p>
+        <button class="danger" type="button" (click)="store.deleteSelection()">Delete wall</button>
       } @else if (store.selectedMeasurement(); as measurement) {
         <p class="metric">Length: {{ format(dist(measurement.start, measurement.end)) }}</p>
         <p class="metric">
@@ -260,7 +276,7 @@ import { StackOrder } from './stack-order/stack-order';
         </button>
       } @else {
         <p class="empty">
-          Select an object or measurement. Enter sizes in {{ store.lengthUnit() }}.
+          Select an object, wall or measurement. Enter sizes in {{ store.lengthUnit() }}.
         </p>
       }
     </div>
@@ -272,7 +288,12 @@ export class Inspector {
   protected readonly abs = Math.abs;
   protected readonly objectColor = objectColor;
   protected readonly measurementColor = measurementColor;
+  protected readonly wallLength = wallLength;
 
+  protected setWallThickness(id: string, event: Event): void {
+    const v = this.lengthValue(event);
+    if (v > 0) this.store.updateWall(id, { thickness: v });
+  }
   protected setObjectColor(id: string, event: Event): void {
     const color = normalizeColor(this.inputValue(event));
     if (color) {

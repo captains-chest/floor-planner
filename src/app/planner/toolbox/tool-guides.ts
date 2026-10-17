@@ -47,12 +47,23 @@ export const TOOL_GUIDES = {
     summary: 'Drag to draw an ellipse.',
     tips: [],
   }),
+  wall: guide('wall', {
+    label: 'Wall',
+    shortcut: 'W',
+    summary: 'Click points for a wall path. Double-click to finish.',
+    tips: [
+      { keys: ['Alt', '⌥'], text: 'locks to 90°' },
+      { keys: ['Shift'], text: 'turns snap off' },
+      { keys: ['Enter'], text: 'finishes the wall' },
+    ],
+  }),
 } as const satisfies Record<ToolbarTool, ToolGuide>;
 
 export const TOOL_GROUPS: readonly ToolGroup[] = [
   { name: 'Navigate', tools: [TOOL_GUIDES.select, TOOL_GUIDES.pan] },
   { name: 'Measure', tools: [TOOL_GUIDES.measure] },
   { name: 'Objects', tools: [TOOL_GUIDES.rect, TOOL_GUIDES.circle, TOOL_GUIDES.ellipse] },
+  { name: 'Structure', tools: [TOOL_GUIDES.wall] },
 ];
 
 const TOOL_GUIDE_LIST: readonly ToolGuide[] = Object.values(TOOL_GUIDES);

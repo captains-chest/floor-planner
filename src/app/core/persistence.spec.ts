@@ -53,7 +53,8 @@ describe('parseProjectDocument', () => {
     });
 
     expect(parsed?.plan.name).toBe('Old plan');
-    expect(parsed?.plan).not.toHaveProperty('walls');
+    // Legacy walls (start/end form) are ignored; the new polyline walls list is empty.
+    expect(parsed?.plan.walls).toEqual([]);
     expect(parsed?.plan).not.toHaveProperty('layers');
     expect(parsed?.plan).not.toHaveProperty('activeLayerId');
     expect(parsed?.plan).not.toHaveProperty('rooms');
@@ -151,5 +152,58 @@ describe('parseProjectDocument', () => {
     expect(kept?.lengthUnit).toBe('cm');
     expect(kept?.gridSpacingMeters).toBe(0.5);
     expect(replaced?.gridSpacingMeters).toBe(1);
+  });
+});
+
+describe('walls persistence', () => {
+  it('keeps valid walls, clamps thickness, drops short/invalid walls, older saves get []', () => {
+    const parsed = parseProjectDocument({
+      kind: PROJECT_KIND,
+      formatVersion: 1,
+      plan: {
+        version: 1,
+        name: 'W',
+        objects: [],
+        measurements: [],
+        walls: [
+          {
+            id: 'w1',
+            points: [
+              { x: 0, y: 0 },
+              { x: 2, y: 0 },
+              { x: 2, y: 1 },
+            ],
+            thickness: 99,
+          },
+          { id: 'w2', points: [{ x: 0, y: 0 }], thickness: 0.2 },
+          {
+            id: 'w3',
+            points: [
+              { x: 0, y: 0 },
+              { x: 'a', y: 0 },
+            ],
+            thickness: 0.2,
+          },
+        ],
+        groups: [],
+        viewport: { panX: 0, panY: 0, zoom: 40 },
+      },
+    });
+    expect(parsed!.plan.walls).toHaveLength(1);
+    expect(parsed!.plan.walls[0].thickness).toBe(1);
+    expect(parsed!.plan.walls[0].points).toHaveLength(3);
+    const old = parseProjectDocument({
+      kind: PROJECT_KIND,
+      formatVersion: 1,
+      plan: {
+        version: 1,
+        name: 'O',
+        objects: [],
+        measurements: [],
+        groups: [],
+        viewport: { panX: 0, panY: 0, zoom: 40 },
+      },
+    });
+    expect(old!.plan.walls).toEqual([]);
   });
 });
