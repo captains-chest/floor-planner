@@ -1,4 +1,11 @@
-import { borderPaint, fillPaint, FloorPlan, Opening, PlacedObject, Wall } from '../models/floor-plan';
+import {
+  borderPaint,
+  fillPaint,
+  FloorPlan,
+  Opening,
+  PlacedObject,
+  Wall,
+} from '../models/floor-plan';
 import { wallRenderSegments } from './openings';
 import { contentBBox, dimensionView, type BoundingBox } from './geometry';
 import { formatLength, type LengthUnit } from './units';
