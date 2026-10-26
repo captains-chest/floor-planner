@@ -20,14 +20,14 @@
     "@angular/core": "^22.2.3",
     "@angular/forms": "^22.2.3",
     "@angular/platform-browser": "^22.2.3",
-    "@captains-chest/material-symbols-rounded-icons": "^3.0.0",
-    "@captains-chest/material-symbols-rounded-icons-filled": "^3.0.0",
+    "@captains-chest/material-symbols-rounded-icons": "^3.1.0",
+    "@captains-chest/material-symbols-rounded-icons-filled": "^3.1.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
   },
   "devDependencies": {
-    "@angular/build": "^22.2.3",
-    "@angular/cli": "^22.2.3",
+    "@angular/build": "^22.2.4",
+    "@angular/cli": "^22.2.4",
     "@angular/compiler-cli": "^22.2.3",
     "typescript": "~6.0.2",
     "vite-plus": "catalog:"
