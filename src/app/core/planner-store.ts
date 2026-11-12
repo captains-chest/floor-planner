@@ -5,12 +5,21 @@ import {
   PlacedObject,
   Point,
   Selection,
+  Opening,
+  OpeningKind,
   ShapeKind,
   Tool,
+  Wall,
   Viewport,
 } from '../models/floor-plan';
 import { type Hit } from './geometry';
-import { furnitureById, furnitureObjectName, placementSpot } from './furniture';
+import {
+  CUPBOARD_DOOR_ID,
+  cupboardDoorPlacement,
+  furnitureById,
+  furnitureObjectName,
+  placementSpot,
+} from './furniture';
 import { renderPlanSvg, type RenderedPlan } from './plan-export';
 import { measureImage, readFileAsDataUrl } from './image';
 import { parseProjectDocument, Persistence, serializeProject } from './persistence';
@@ -25,6 +34,10 @@ import {
   selectedMeasurement as measurementOf,
   selectedMeasurements as measurementsOf,
   selectedObject as objectOf,
+  selectedOpening as openingOf,
+  selectedOpenings as openingsOf,
+  selectedWall as wallOf,
+  selectedWalls as wallsOf,
   selectedPlacedObjects,
   selectFromHit as applySelectFromHit,
   selectionCount as countSelection,
@@ -85,6 +98,10 @@ export class PlannerStore {
 
   readonly selectedObject = computed(() => objectOf(this.#plan(), this.#selection()));
   readonly selectedMeasurement = computed(() => measurementOf(this.#plan(), this.#selection()));
+  readonly selectedWall = computed(() => wallOf(this.#plan(), this.#selection()));
+  readonly selectedWalls = computed(() => wallsOf(this.#plan(), this.#selection()));
+  readonly selectedOpenings = computed(() => openingsOf(this.#plan(), this.#selection()));
+  readonly selectedOpening = computed(() => openingOf(this.#plan(), this.#selection()));
   readonly selectedObjects = computed(() => selectedPlacedObjects(this.#plan(), this.#selection()));
   readonly selectedGroup = computed(() => groupOf(this.#plan(), this.#selection()));
   readonly selectedMeasurements = computed(() => measurementsOf(this.#plan(), this.#selection()));
@@ -92,7 +109,7 @@ export class PlannerStore {
 
   readonly canGroup = computed(() => this.selectedObjects().length >= 2);
   readonly canUngroup = computed(() => this.#selection()?.type === 'group');
-  readonly canCopy = computed(() => this.selectedObjects().length > 0);
+  readonly canCopy = computed(() => this.selectedObjects().length > 0 || !!this.selectedOpening());
   readonly canPaste = computed(() => {
     this.#historyTick();
     return this.#edit.canPaste;
@@ -320,6 +337,25 @@ export class PlannerStore {
     const centerY = panY + this.#viewSize.height / zoom / 2;
     const name = furnitureObjectName(item, this.#plan());
     const spot = placementSpot(item, { x: centerX, y: centerY }, this.#plan());
+    if (item.id === CUPBOARD_DOOR_ID) {
+      // One undo step for the cupboard plus its door (placed, then grouped by the gesture).
+      this.#edit.beginEdit();
+      const placed = this.#edit.addObject(item.kind, spot.x, spot.y, item.width, item.depth, name);
+      const door = cupboardDoorPlacement(placed.object);
+      this.#edit.addOpening('door', door.center, {
+        width: door.width,
+        rotation: door.rotation,
+        wallId: null,
+        objectId: placed.object.id,
+        flipV: true,
+      });
+      this.#edit.endEdit();
+      this.#sync();
+      this.#selection.set({ type: 'object', id: placed.object.id });
+      this.setTool('select');
+      this.#status.set(`Added ${name}. Drag to move, or set its size in Properties.`);
+      return placed.object;
+    }
     const result = this.#edit.addObject(item.kind, spot.x, spot.y, item.width, item.depth, name);
     this.#sync();
     this.#selection.set({ type: 'object', id: result.object.id });
@@ -390,6 +426,49 @@ export class PlannerStore {
     return null;
   }
 
+  addWall(points: Point[], thickness?: number): Wall | null {
+    const result = this.#edit.addWall(points, thickness);
+    this.#sync();
+    if ('wall' in result) {
+      this.#selection.set({ type: 'wall', id: result.wall.id });
+      this.#status.set('Wall added. Drag to move, or set thickness in Properties.');
+      return result.wall;
+    }
+    return null;
+  }
+  updateWall(id: string, patch: Partial<Pick<Wall, 'points' | 'thickness' | 'color'>>): void {
+    this.#edit.updateWall(id, patch);
+    this.#sync();
+  }
+
+  moveConnectedWallEndpoint(id: string, end: 'start' | 'end', target: Point): void {
+    this.#edit.moveConnectedWallEndpoint(id, end, target);
+    this.#sync();
+  }
+
+  addOpening(
+    kind: OpeningKind,
+    center: Point,
+    opts: {
+      width?: number;
+      rotation?: number;
+      wallId?: string | null;
+      objectId?: string | null;
+      flipH?: boolean;
+      flipV?: boolean;
+    } = {},
+  ): Opening {
+    const result = this.#edit.addOpening(kind, center, opts);
+    this.#sync();
+    this.#selection.set({ type: 'opening', id: result.opening.id });
+    this.setTool('select');
+    this.#status.set(kind === 'door' ? 'Door added.' : 'Window added.');
+    return result.opening;
+  }
+  updateOpening(id: string, patch: Partial<Opening>): void {
+    this.#edit.updateOpening(id, patch);
+    this.#sync();
+  }
   updateMeasurement(
     id: string,
     patch: Partial<Pick<Measurement, 'start' | 'end' | 'offset' | 'color'>>,
@@ -540,6 +619,12 @@ const toolHint = (tool: Tool): string => {
       return 'Click and drag to place a circle';
     case 'ellipse':
       return 'Click and drag to place an ellipse';
+    case 'door':
+      return 'Click to place a door · snaps to walls and object edges · Shift: no snap';
+    case 'window':
+      return 'Click to place a window · snaps to walls and object edges · Shift: no snap';
+    case 'wall':
+      return 'Click the start, then the end, of a straight wall · Alt: 90° · Shift: snap off';
     default: {
       const _never: never = tool;
       return _never;

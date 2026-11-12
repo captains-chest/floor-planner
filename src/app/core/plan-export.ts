@@ -1,4 +1,14 @@
-import { FloorPlan, PlacedObject, objectColor } from '../models/floor-plan';
+import {
+  borderPaint,
+  fillPaint,
+  FloorPlan,
+  Opening,
+  PlacedObject,
+  Wall,
+  openingPaint,
+  wallPaint,
+} from '../models/floor-plan';
+import { wallRenderSegments } from './openings';
 import { contentBBox, dimensionView, type BoundingBox } from './geometry';
 import { formatLength, type LengthUnit } from './units';
 
@@ -62,6 +72,8 @@ export function renderPlanSvg(
       `<image href="${esc(imageDataUrl)}" x="0" y="0" width="${n(imageSize.width)}" height="${n(imageSize.height)}" preserveAspectRatio="none"/>`,
     );
   }
+  for (const wall of plan.walls ?? []) parts.push(wallSvg(wall, plan.openings ?? []));
+  for (const opening of plan.openings ?? []) parts.push(openingSvg(opening, m(1)));
   for (const obj of plan.objects) {
     parts.push(objectSvg(obj, m(1), label));
   }
@@ -131,11 +143,55 @@ export function exportFilename(planName: string, extension: string): string {
   return `${slug || 'floor-plan'}.${extension}`;
 }
 
+function wallSvg(wall: Wall, openings: Opening[]): string {
+  const paint = wallPaint(wall);
+  if (paint.stroke === 'none') return '';
+  // Consecutive segments become one polyline so corners join square, with no rounding.
+  const chains: { x: number; y: number }[][] = [];
+  for (const [a, b] of wallRenderSegments(wall, openings)) {
+    const last = chains[chains.length - 1];
+    if (
+      last &&
+      Math.abs(last[last.length - 1].x - a.x) < 1e-9 &&
+      Math.abs(last[last.length - 1].y - a.y) < 1e-9
+    ) {
+      last.push(b);
+    } else {
+      chains.push([a, b]);
+    }
+  }
+  return chains
+    .map(
+      (pts) =>
+        `<polyline points="${pts.map((pt) => `${n(pt.x)},${n(pt.y)}`).join(' ')}" fill="none" stroke="${paint.stroke}" stroke-opacity="${n(paint.opacity)}" stroke-width="${n(wall.thickness)}" stroke-linecap="square" stroke-linejoin="miter"/>`,
+    )
+    .join('');
+}
+function openingSvg(o: Opening, hairline: number): string {
+  const paint = openingPaint(o, o.kind === 'window' ? INK : '#000000');
+  if (paint.stroke === 'none') return '';
+  const w = o.width,
+    h = w / 2,
+    sw = n(hairline * 1.5),
+    sx = o.flipH ? -1 : 1,
+    sy = o.flipV ? -1 : 1;
+  const stroke = `stroke="${paint.stroke}" stroke-opacity="${n(paint.opacity)}"`;
+  const inner =
+    o.kind === 'door'
+      ? `<line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" ${stroke} stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(-h)}" y2="${n(-w)}" ${stroke} stroke-width="${sw}"/><path d="M ${n(-h)} ${n(-w)} A ${n(w)} ${n(w)} 0 0 1 ${n(h)} 0" fill="none" ${stroke} stroke-width="${sw}"/>`
+      : `<rect x="${n(-h)}" y="-0.075" width="${n(w)}" height="0.15" fill="none" ${stroke} stroke-width="${sw}"/><line x1="${n(-h)}" y1="0" x2="${n(h)}" y2="0" ${stroke} stroke-width="${sw}"/>`;
+  return `<g transform="translate(${n(o.center.x)} ${n(o.center.y)}) rotate(${n(o.rotation ?? 0)}) scale(${sx} ${sy})">${inner}</g>`;
+}
 function objectSvg(obj: PlacedObject, hairline: number, label: number): string {
   const cx = obj.x + obj.width / 2;
   const cy = obj.y + obj.depth / 2;
-  const fill = objectColor(obj);
-  const paint = `fill="${fill}" fill-opacity="0.82" stroke="${INK}" stroke-opacity="0.6" stroke-width="${n(hairline)}"`;
+  const fill = fillPaint(obj);
+  const border = borderPaint(obj);
+  const fillAttr =
+    fill.fill === 'none' ? 'fill="none"' : `fill="${fill.fill}" fill-opacity="${n(fill.opacity)}"`;
+  const paint = border
+    ? `${fillAttr} stroke="${border.stroke}" stroke-opacity="${n(border.opacity)}" stroke-width="${n(hairline * 3)}"`
+    : `${fillAttr} stroke="none"`;
   const shape =
     obj.kind === 'rect'
       ? `<rect x="${n(obj.x)}" y="${n(obj.y)}" width="${n(obj.width)}" height="${n(obj.depth)}" ${paint}/>`

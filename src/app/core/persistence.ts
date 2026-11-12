@@ -5,6 +5,11 @@ import {
   Measurement,
   ObjectGroup,
   PlacedObject,
+  Opening,
+  Point,
+  clampOpeningWidth,
+  Wall,
+  clampWallThickness,
   normalizeColor,
 } from '../models/floor-plan';
 import { normalizeHelperSpacing } from './helper-grid';
@@ -158,6 +163,12 @@ function normalizePlan(raw: unknown): FloorPlan {
           .map(normalizeMeasurement)
           .filter((item): item is Measurement => item !== null)
       : [],
+    walls: Array.isArray(value.walls)
+      ? value.walls.map(normalizeWall).filter((w): w is Wall => w !== null)
+      : [],
+    openings: Array.isArray(value.openings)
+      ? value.openings.map(normalizeOpening).filter((o): o is Opening => o !== null)
+      : [],
     groups: Array.isArray(value.groups)
       ? value.groups.map(normalizeGroup).filter((item): item is ObjectGroup => item !== null)
       : [],
@@ -187,6 +198,42 @@ function normalizeBackground(raw: FloorPlan['background'] | undefined): FloorPla
   };
 }
 
+function normalizeOpening(raw: unknown): Opening | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Partial<Opening>;
+  if (typeof value.id !== 'string' || (value.kind !== 'door' && value.kind !== 'window'))
+    return null;
+  const center = normalizePoint(value.center);
+  if (!center) return null;
+  const color = value.color === 'transparent' ? 'transparent' : normalizeColor(value.color);
+  return {
+    id: value.id,
+    kind: value.kind,
+    center,
+    width: clampOpeningWidth(value.kind, value.width),
+    rotation:
+      typeof value.rotation === 'number' && Number.isFinite(value.rotation) ? value.rotation : 0,
+    flipH: Boolean(value.flipH),
+    flipV: Boolean(value.flipV),
+    wallId: typeof value.wallId === 'string' ? value.wallId : null,
+    objectId: typeof value.objectId === 'string' ? value.objectId : null,
+    ...(color ? { color } : {}),
+  };
+}
+function normalizeWall(raw: unknown): Wall | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Partial<Wall>;
+  if (typeof value.id !== 'string' || !Array.isArray(value.points)) return null;
+  const points = value.points.map(normalizePoint).filter((pt): pt is Point => pt !== null);
+  if (points.length < 2) return null;
+  const color = value.color === 'transparent' ? 'transparent' : normalizeColor(value.color);
+  return {
+    id: value.id,
+    points,
+    thickness: clampWallThickness(value.thickness),
+    ...(color ? { color } : {}),
+  };
+}
 function normalizeGroup(raw: unknown): ObjectGroup | null {
   if (!raw || typeof raw !== 'object') {
     return null;
@@ -224,6 +271,8 @@ function normalizeObject(raw: unknown): PlacedObject | null {
     return null;
   }
   const color = normalizeColor(value.color);
+  const borderRaw = normalizeColor(value.borderColor);
+  const border = borderRaw && !borderRaw.endsWith('00') ? borderRaw : undefined;
   const kind =
     value.kind === 'circle' || value.kind === 'ellipse' || value.kind === 'rect'
       ? value.kind
@@ -238,7 +287,8 @@ function normalizeObject(raw: unknown): PlacedObject | null {
     depth: Math.max(0.01, num(value.depth, 0.8)),
     rotation: num(value.rotation, 0),
     groupId: typeof value.groupId === 'string' ? value.groupId : null,
-    ...(color ? { color } : {}),
+    ...(value.color === 'transparent' ? { color: 'transparent' } : color ? { color } : {}),
+    ...(border ? { borderColor: border } : {}),
   };
 }
 
