@@ -48,7 +48,10 @@ export function inputStep(unit: LengthUnit): number {
 }
 
 export function inputMin(unit: LengthUnit): number {
-  return unit === 'cm' ? 0.1 : 0.01;
+  // A number input uses its minimum as the step base: with min 0.1 and step 1 in cm,
+  // the spinner would land on 0.1, 1.1, … 22.1 instead of whole centimetres.
+  // Keeping the minimum on the step series makes stepping stay on whole cm.
+  return inputStep(unit);
 }
 
 export function parseLengthToMeters(raw: string, defaultUnit: LengthUnit = 'm'): number | null {

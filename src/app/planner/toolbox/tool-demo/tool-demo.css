@@ -327,6 +327,49 @@
   --y1: 84%;
 }
 
+.demo-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  animation: structure-in 3.6s ease-in-out infinite;
+}
+
+.dw-edge,
+.dw-core {
+  fill: none;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+.dw-edge {
+  stroke: #d7dde8;
+  stroke-width: 8;
+}
+
+.dw-core {
+  stroke: #000;
+  stroke-width: 5.5;
+}
+
+.dw-line {
+  fill: none;
+  stroke: #f5f7fa;
+  stroke-width: 2;
+}
+
+.dw-fill {
+  fill: var(--canvas);
+  stroke: #f5f7fa;
+  stroke-width: 2;
+}
+
+.dw-dot {
+  fill: var(--snap);
+  stroke: var(--canvas);
+  stroke-width: 1;
+}
+
 .crosshair {
   left: var(--x1);
   top: var(--y1);
@@ -562,7 +605,22 @@
   }
 }
 
+@keyframes structure-in {
+  0%,
+  8% {
+    opacity: 0.25;
+  }
+  25%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.25;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .demo-svg,
   .window,
   .crossing,
   .sofa .ring,
@@ -576,6 +634,49 @@
   .scale-chip,
   .dimension,
   .shape,
+  .demo-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    animation: structure-in 3.6s ease-in-out infinite;
+  }
+
+  .dw-edge,
+  .dw-core {
+    fill: none;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+  }
+
+  .dw-edge {
+    stroke: #d7dde8;
+    stroke-width: 8;
+  }
+
+  .dw-core {
+    stroke: #000;
+    stroke-width: 5.5;
+  }
+
+  .dw-line {
+    fill: none;
+    stroke: #f5f7fa;
+    stroke-width: 2;
+  }
+
+  .dw-fill {
+    fill: var(--canvas);
+    stroke: #f5f7fa;
+    stroke-width: 2;
+  }
+
+  .dw-dot {
+    fill: var(--snap);
+    stroke: var(--canvas);
+    stroke-width: 1;
+  }
+
   .crosshair {
     animation: none;
   }

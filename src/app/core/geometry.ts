@@ -1,4 +1,4 @@
-import { FloorPlan, Measurement, Point, type PlacedObject } from '../models/floor-plan';
+import { FloorPlan, Measurement, Point, Wall, type PlacedObject } from '../models/floor-plan';
 import { formatLength, type LengthUnit } from './units';
 
 export function dist(a: Point, b: Point): number {
@@ -189,6 +189,147 @@ export function snapObjectMove(
   return bestCorner;
 }
 
+export interface WallSnap {
+  point: Point;
+  snapped: boolean;
+  kind: 'none' | 'wall-endpoint' | 'wall-segment';
+}
+
+/**
+ * Snaps a point to other walls: endpoints win over segment projections, both within
+ * `threshold`. `extraSegments` lets the wall being drawn snap to its own draft polyline.
+ */
+export function snapWallPoint(
+  p: Point,
+  walls: readonly Wall[],
+  threshold: number,
+  enabled: boolean,
+  extraSegments: readonly [Point, Point][] = [],
+): WallSnap {
+  const none: WallSnap = { point: { ...p }, snapped: false, kind: 'none' };
+  if (!enabled || threshold <= 0) return none;
+  let bestEndpoint: { point: Point; distance: number } | null = null;
+  for (const wall of walls) {
+    for (const pt of wall.points) {
+      const d = dist(p, pt);
+      if (d <= threshold && (!bestEndpoint || d < bestEndpoint.distance)) {
+        bestEndpoint = { point: { ...pt }, distance: d };
+      }
+    }
+  }
+  for (const [a, b] of extraSegments) {
+    for (const pt of [a, b]) {
+      const d = dist(p, pt);
+      if (d <= threshold && (!bestEndpoint || d < bestEndpoint.distance)) {
+        bestEndpoint = { point: { ...pt }, distance: d };
+      }
+    }
+  }
+  if (bestEndpoint) {
+    return { point: bestEndpoint.point, snapped: true, kind: 'wall-endpoint' };
+  }
+  let bestSegment: { point: Point; distance: number } | null = null;
+  const segments: [Point, Point][] = [
+    ...walls.flatMap((wall) => wallSegments(wall)),
+    ...extraSegments,
+  ];
+  for (const [a, b] of segments) {
+    const hit = closestPointOnSegment(p, a, b);
+    if (hit.distance <= threshold && (!bestSegment || hit.distance < bestSegment.distance)) {
+      bestSegment = { point: hit.point, distance: hit.distance };
+    }
+  }
+  if (bestSegment) {
+    return { point: bestSegment.point, snapped: true, kind: 'wall-segment' };
+  }
+  return none;
+}
+
+/**
+ * Adjusts a wall translation (dx, dy) so the moving wall's points land on other walls'
+ * endpoints or segments — the smallest such adjustment within `threshold`, if any.
+ */
+export function snapWallTranslation(
+  points: readonly Point[],
+  others: readonly Wall[],
+  dx: number,
+  dy: number,
+  threshold: number,
+  enabled: boolean,
+): { dx: number; dy: number; snapped: boolean } {
+  const none = { dx, dy, snapped: false };
+  if (!enabled || threshold <= 0 || points.length === 0 || others.length === 0) return none;
+  let bestDx = dx;
+  let bestDy = dy;
+  let bestDistance = threshold;
+  let found = false;
+  const consider = (adjX: number, adjY: number) => {
+    const distance = Math.hypot(adjX - dx, adjY - dy);
+    if (distance <= bestDistance) {
+      bestDx = adjX;
+      bestDy = adjY;
+      bestDistance = distance;
+      found = true;
+    }
+  };
+  for (const pt of points) {
+    const moved = { x: pt.x + dx, y: pt.y + dy };
+    for (const wall of others) {
+      for (const target of wall.points) {
+        consider(target.x - pt.x, target.y - pt.y);
+      }
+      for (const [a, b] of wallSegments(wall)) {
+        const hit = closestPointOnSegment(moved, a, b);
+        consider(dx + (hit.point.x - moved.x), dy + (hit.point.y - moved.y));
+      }
+    }
+  }
+  return found ? { dx: bestDx, dy: bestDy, snapped: true } : none;
+}
+
+/** A wall polyline with only its start or end point moved — the rest is untouched. */
+export function moveWallEndpoint(
+  points: readonly Point[],
+  end: 'start' | 'end',
+  target: Point,
+): Point[] {
+  return points.map((pt, i) =>
+    (end === 'start' && i === 0) || (end === 'end' && i === points.length - 1)
+      ? { ...target }
+      : { ...pt },
+  );
+}
+
+export interface ConnectedWallEnd {
+  id: string;
+  end: 'start' | 'end';
+}
+
+/**
+ * Every wall end coincident with the given wall's end, including that wall itself.
+ * Walls connect by sharing exact points through snapping, so coincidence within a
+ * tiny epsilon is the connection; no separate connection record is kept.
+ */
+export function connectedWallEnds(
+  walls: readonly Wall[],
+  wallId: string,
+  end: 'start' | 'end',
+  epsilon = 1e-6,
+): ConnectedWallEnd[] {
+  const wall = walls.find((w) => w.id === wallId);
+  if (!wall || wall.points.length === 0) return [];
+  const point = end === 'start' ? wall.points[0] : wall.points[wall.points.length - 1];
+  const connected: ConnectedWallEnd[] = [];
+  for (const other of walls) {
+    if (other.points.length === 0) continue;
+    if (dist(point, other.points[0]) <= epsilon) connected.push({ id: other.id, end: 'start' });
+    if (other.points.length > 1 && dist(point, other.points[other.points.length - 1]) <= epsilon) {
+      connected.push({ id: other.id, end: 'end' });
+    }
+  }
+  return connected;
+}
+
 export function pointInRect(p: Point, x: number, y: number, width: number, depth: number): boolean {
   return p.x >= x && p.x <= x + width && p.y >= y && p.y <= y + depth;
 }
@@ -214,6 +355,9 @@ export type Hit =
   | { type: 'object'; id: string }
   | { type: 'measurement'; id: string }
   | { type: 'measurement-end'; id: string; end: 'start' | 'end' }
+  | { type: 'wall'; id: string }
+  | { type: 'wall-end'; id: string; end: 'start' | 'end' }
+  | { type: 'opening'; id: string }
   | { type: 'rotate-object'; id: string }
   | { type: 'rotate-objects'; ids: string[] };
 
@@ -344,6 +488,7 @@ export function hitTest(
   handles: {
     objects: readonly PlacedObject[];
     measurementId: string | null;
+    wallId?: string | null;
   },
 ): Hit | null {
   const handleR = 10 / zoom;
@@ -367,6 +512,19 @@ export function hitTest(
     }
   }
 
+  if (handles.wallId) {
+    const wall = (plan.walls ?? []).find((item) => item.id === handles.wallId);
+    if (wall && wall.points.length > 0) {
+      if (dist(p, wall.points[0]) <= handleR) {
+        return { type: 'wall-end', id: wall.id, end: 'start' };
+      }
+      const lastPoint = wall.points[wall.points.length - 1];
+      if (dist(p, lastPoint) <= handleR) {
+        return { type: 'wall-end', id: wall.id, end: 'end' };
+      }
+    }
+  }
+
   if (handles.measurementId) {
     const measurement = (plan.measurements ?? []).find((item) => item.id === handles.measurementId);
     if (measurement) {
@@ -380,6 +538,42 @@ export function hitTest(
     }
   }
 
+  for (let k = (plan.openings ?? []).length - 1; k >= 0; k -= 1) {
+    const o = plan.openings[k];
+    const rad = ((o.rotation ?? 0) * Math.PI) / 180;
+    const dx = (Math.cos(rad) * o.width) / 2,
+      dy = (Math.sin(rad) * o.width) / 2;
+    const hinge = { x: o.center.x - dx, y: o.center.y - dy };
+    const spanEnd = { x: o.center.x + dx, y: o.center.y + dy };
+    const tolerance = Math.max(0.12, measureExtra);
+    if (closestPointOnSegment(p, hinge, spanEnd).distance <= tolerance)
+      return { type: 'opening', id: o.id };
+    if (o.kind === 'door') {
+      // The leaf (hinge to swung-open end) and its swing arc are part of the door too.
+      const leafLocal = {
+        x: (o.flipH ? 1 : -1) * (o.width / 2),
+        y: (o.flipV ? 1 : -1) * o.width,
+      };
+      const leafEnd = {
+        x: o.center.x + leafLocal.x * Math.cos(rad) - leafLocal.y * Math.sin(rad),
+        y: o.center.y + leafLocal.x * Math.sin(rad) + leafLocal.y * Math.cos(rad),
+      };
+      // Mirror the hinge when flipH puts the leaf on the other end of the span.
+      const leafHinge = o.flipH ? spanEnd : hinge;
+      if (closestPointOnSegment(p, leafHinge, leafEnd).distance <= tolerance)
+        return { type: 'opening', id: o.id };
+    }
+  }
+  for (let k = (plan.walls ?? []).length - 1; k >= 0; k -= 1) {
+    const wall = plan.walls[k];
+    if (
+      wallSegments(wall).some(
+        ([a, b]) =>
+          closestPointOnSegment(p, a, b).distance <= Math.max(wall.thickness / 2, measureExtra),
+      )
+    )
+      return { type: 'wall', id: wall.id };
+  }
   const measurements = plan.measurements ?? [];
   for (let i = measurements.length - 1; i >= 0; i -= 1) {
     const measurement = measurements[i];
@@ -440,6 +634,13 @@ export function contentBBox(
       include(corner.x, corner.y);
     }
   }
+  for (const o of plan.openings ?? []) {
+    include(o.center.x - o.width / 2, o.center.y - o.width / 2, o.width, o.width);
+  }
+  for (const wall of plan.walls ?? []) {
+    for (const pt of wall.points)
+      include(pt.x - wall.thickness / 2, pt.y - wall.thickness / 2, wall.thickness, wall.thickness);
+  }
   for (const measurement of plan.measurements ?? []) {
     include(measurement.start.x, measurement.start.y);
     include(measurement.end.x, measurement.end.y);
@@ -486,4 +687,16 @@ export function dimensionView(
     tickDx: normal.x * tickLength,
     tickDy: normal.y * tickLength,
   };
+}
+
+export function wallSegments(wall: Pick<Wall, 'points'>): [Point, Point][] {
+  const out: [Point, Point][] = [];
+  for (let i = 1; i < wall.points.length; i++) out.push([wall.points[i - 1], wall.points[i]]);
+  return out;
+}
+export function wallLength(wall: Pick<Wall, 'points'>): number {
+  return wallSegments(wall).reduce((sum, [a, b]) => sum + dist(a, b), 0);
+}
+export function wallPointsAttr(wall: Pick<Wall, 'points'>): string {
+  return wall.points.map((pt) => `${pt.x},${pt.y}`).join(' ');
 }

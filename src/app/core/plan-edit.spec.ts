@@ -41,6 +41,20 @@ describe('PlanEdit', () => {
     expect(edit.plan.objects[4].x).toBeCloseTo(0.5);
   });
 
+  it('groups a live color-picking gesture into one undo step', () => {
+    const edit = new PlanEdit();
+    edit.hydrate({ ...edit.plan, objects: [place({ id: 'a', x: 0, y: 0 })] }, null);
+    edit.beginEdit();
+    edit.updateObject('a', { color: '#111111' });
+    edit.updateObject('a', { color: '#222222', borderColor: '#333333' });
+    edit.endEdit();
+    expect(edit.plan.objects[0].color).toBe('#222222');
+    expect(edit.undo()).toBe(true);
+    expect(edit.plan.objects[0].color).toBeUndefined();
+    expect(edit.plan.objects[0].borderColor).toBeUndefined();
+    expect(edit.canUndo).toBe(false);
+  });
+
   it('restacks objects in the plan order', () => {
     const edit = new PlanEdit();
     edit.hydrate(
@@ -122,5 +136,165 @@ describe('PlanEdit', () => {
     expect(edit.plan.objects[0].width).toBe(2);
     expect(edit.undo()).toBe(true);
     expect(edit.plan.objects[0].width).toBe(1);
+  });
+});
+
+describe('connected wall ends', () => {
+  const planWithCorner = () => {
+    const edit = new PlanEdit();
+    edit.hydrate(
+      {
+        ...edit.plan,
+        walls: [
+          {
+            id: 'w1',
+            points: [
+              { x: 0, y: 0 },
+              { x: 2, y: 0 },
+            ],
+            thickness: 0.15,
+          },
+          {
+            id: 'w2',
+            points: [
+              { x: 2, y: 0 },
+              { x: 2, y: 2 },
+            ],
+            thickness: 0.15,
+          },
+          {
+            id: 'w3',
+            points: [
+              { x: 5, y: 5 },
+              { x: 6, y: 5 },
+            ],
+            thickness: 0.15,
+          },
+        ],
+        openings: [
+          {
+            id: 'd1',
+            kind: 'door' as const,
+            center: { x: 1, y: 0 },
+            width: 0.9,
+            rotation: 0,
+            wallId: 'w1',
+          },
+          {
+            id: 'd2',
+            kind: 'door' as const,
+            center: { x: 2, y: 1 },
+            width: 0.9,
+            rotation: 90,
+            wallId: 'w2',
+          },
+        ],
+      },
+      null,
+    );
+    return edit;
+  };
+
+  it('drags a shared corner: both wall ends land together, openings follow, one undo restores all', () => {
+    const edit = planWithCorner();
+    edit.beginEdit();
+    const moved = edit.moveConnectedWallEndpoint('w1', 'end', { x: 3, y: 1 });
+    edit.endEdit();
+    expect(moved).toEqual([
+      { id: 'w1', end: 'end' },
+      { id: 'w2', end: 'start' },
+    ]);
+    const w1 = edit.plan.walls.find((w) => w.id === 'w1')!;
+    const w2 = edit.plan.walls.find((w) => w.id === 'w2')!;
+    const w3 = edit.plan.walls.find((w) => w.id === 'w3')!;
+    expect(w1.points).toEqual([
+      { x: 0, y: 0 },
+      { x: 3, y: 1 },
+    ]);
+    expect(w2.points).toEqual([
+      { x: 3, y: 1 },
+      { x: 2, y: 2 },
+    ]);
+    expect(w3.points).toEqual([
+      { x: 5, y: 5 },
+      { x: 6, y: 5 },
+    ]);
+    // Doors keep their halfway place along each moved wall.
+    expect(edit.plan.openings[0].center).toEqual({ x: 1.5, y: 0.5 });
+    expect(edit.plan.openings[1].center).toEqual({ x: 2.5, y: 1.5 });
+    expect(edit.undo()).toBe(true);
+    expect(edit.plan.walls.find((w) => w.id === 'w1')!.points).toEqual([
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    expect(edit.plan.walls.find((w) => w.id === 'w2')!.points).toEqual([
+      { x: 2, y: 0 },
+      { x: 2, y: 2 },
+    ]);
+    expect(edit.plan.openings[0].center).toEqual({ x: 1, y: 0 });
+    expect(edit.canUndo).toBe(false);
+  });
+
+  it('drags an unconnected end without touching other walls', () => {
+    const edit = planWithCorner();
+    edit.moveConnectedWallEndpoint('w1', 'start', { x: -1, y: 0 });
+    expect(edit.plan.walls.find((w) => w.id === 'w1')!.points).toEqual([
+      { x: -1, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    expect(edit.plan.walls.find((w) => w.id === 'w2')!.points).toEqual([
+      { x: 2, y: 0 },
+      { x: 2, y: 2 },
+    ]);
+  });
+});
+
+describe('walls', () => {
+  it('places one straight wall per placement; the next placement is a separate wall', () => {
+    const edit = new PlanEdit();
+    edit.addWall([
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    // Even starting exactly where the previous wall ended, this is its own wall,
+    // not a continuation of a chain.
+    edit.addWall([
+      { x: 2, y: 0 },
+      { x: 2, y: 2 },
+    ]);
+    expect(edit.plan.walls).toHaveLength(2);
+    expect(edit.plan.walls[0].points).toEqual([
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+    ]);
+    expect(edit.plan.walls[1].points).toEqual([
+      { x: 2, y: 0 },
+      { x: 2, y: 2 },
+    ]);
+    expect(edit.plan.walls[0].id).not.toBe(edit.plan.walls[1].id);
+  });
+
+  it('adds, updates, scales, deletes and undoes walls', () => {
+    const edit = new PlanEdit();
+    const added = edit.addWall(
+      [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+        { x: 2, y: 0 },
+      ],
+      0.2,
+    );
+    if (!('wall' in added)) throw new Error('wall not added');
+    expect(edit.plan.walls).toHaveLength(1);
+    expect(edit.plan.walls[0].points).toHaveLength(2);
+    edit.updateWall(added.wall.id, { thickness: 5 });
+    expect(edit.plan.walls[0].thickness).toBe(1);
+    edit.applyScale({ x: 0, y: 0 }, { x: 1, y: 0 }, 2);
+    expect(edit.plan.walls[0].points[1].x).toBeCloseTo(4);
+    expect(edit.plan.walls[0].thickness).toBeCloseTo(2);
+    edit.deleteSelection({ type: 'wall', id: added.wall.id });
+    expect(edit.plan.walls).toHaveLength(0);
+    expect(edit.undo()).toBe(true);
+    expect(edit.plan.walls).toHaveLength(1);
   });
 });

@@ -40,6 +40,36 @@
       <span class="chip dim-chip">2.40 m</span>
     </div>
   }
+  @case ('wall') {
+    <svg class="demo-svg" viewBox="0 0 100 50">
+      <line class="dw-edge" x1="14" y1="25" x2="86" y2="25" />
+      <line class="dw-core" x1="14" y1="25" x2="86" y2="25" />
+      <circle class="dw-dot" cx="14" cy="25" r="2.6" />
+      <circle class="dw-dot" cx="86" cy="25" r="2.6" />
+    </svg>
+  }
+  @case ('door') {
+    <svg class="demo-svg" viewBox="0 0 100 50">
+      <line class="dw-edge" x1="8" y1="15" x2="30" y2="15" />
+      <line class="dw-edge" x1="56" y1="15" x2="92" y2="15" />
+      <line class="dw-core" x1="8" y1="15" x2="30" y2="15" />
+      <line class="dw-core" x1="56" y1="15" x2="92" y2="15" />
+      <line class="dw-line" x1="30" y1="15" x2="56" y2="15" />
+      <line class="dw-line" x1="30" y1="15" x2="30" y2="41" />
+      <path class="dw-line" d="M 30 41 A 26 26 0 0 1 56 15" />
+      <circle class="dw-dot" cx="30" cy="15" r="2.6" />
+    </svg>
+  }
+  @case ('window') {
+    <svg class="demo-svg" viewBox="0 0 100 50">
+      <line class="dw-edge" x1="8" y1="25" x2="32" y2="25" />
+      <line class="dw-edge" x1="68" y1="25" x2="92" y2="25" />
+      <line class="dw-core" x1="8" y1="25" x2="32" y2="25" />
+      <line class="dw-core" x1="68" y1="25" x2="92" y2="25" />
+      <rect class="dw-fill" x="32" y="19" width="36" height="12" />
+      <line class="dw-line" x1="32" y1="25" x2="68" y2="25" />
+    </svg>
+  }
   @case ('rect') {
     <div class="shape rect"></div>
     <div class="crosshair"><span></span><span></span></div>

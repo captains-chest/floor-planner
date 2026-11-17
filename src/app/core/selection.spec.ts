@@ -148,6 +148,41 @@ describe('selectBox', () => {
     expect(selectionCount(mixed, selection)).toBe(2);
   });
 
+  it('box-selects walls and windows with the select tool', () => {
+    const plan: FloorPlan = {
+      ...createDefaultPlan(),
+      walls: [
+        {
+          id: 'w1',
+          points: [
+            { x: 0, y: 0 },
+            { x: 5, y: 0 },
+          ],
+          thickness: 0.15,
+        },
+      ],
+      openings: [
+        {
+          id: 'win1',
+          kind: 'window',
+          center: { x: 3.5, y: 0 },
+          width: 1.2,
+          rotation: 0,
+          wallId: 'w1',
+        },
+      ],
+    };
+    const onlyWall = collectBoxSelection(plan, { x: 2.6, y: -0.4 }, { x: 1.8, y: 0.4 });
+    expect(onlyWall.wallIds).toEqual(['w1']);
+    expect(selectBox(plan, null, onlyWall, false)).toEqual({ type: 'wall', id: 'w1' });
+    const onlyWindow = collectBoxSelection(plan, { x: 2.8, y: -0.4 }, { x: 4.2, y: 0.4 });
+    expect(onlyWindow.openingIds).toEqual(['win1']);
+    const aroundAll = collectBoxSelection(plan, { x: -0.5, y: -0.5 }, { x: 5.5, y: 0.5 });
+    const selection = selectBox(plan, null, aroundAll, false);
+    expect(selection?.type).toBe('multi');
+    expect(selectionCount(plan, selection)).toBe(2);
+  });
+
   it('window-selects the offset dimension line', () => {
     const plan: FloorPlan = {
       ...createDefaultPlan(),
